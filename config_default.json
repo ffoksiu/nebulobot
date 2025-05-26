@@ -1,0 +1,36 @@
+{
+  "bot_name": "Absolutely Epic Bot",
+  "status_change_interval_seconds": 10,
+  "bot_statuses": [
+    {
+      "activity_type": "Playing",
+      "activity_name": "with myself"
+    },
+    {
+      "activity_type": "Watching",
+      "activity_name": "You."
+    },
+    {
+      "activity_type": "Listening",
+      "activity_name": "to Myslovitz"
+    },
+    {
+      "activity_type": "Competing",
+      "activity_name": "in Brawl Stars"
+    },
+    {
+      "activity_type": "Streaming",
+      "activity_name": "on Twitch",
+      "stream_url": "https://twitch.tv/balls"
+    },
+    {
+      "activity_type": "Custom",
+      "activity_name": "I am scared of women"
+    },
+    {
+      "activity_type": "Custom",
+      "activity_name": "kocham natalke"
+    }
+  ],
+  "command_prefix": "!"
+}

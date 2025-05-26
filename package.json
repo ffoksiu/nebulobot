@@ -1,0 +1,20 @@
+{
+  "name": "nadiobot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ffoksiu/nadiobot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ffoksiu/nadiobot/issues"
+  },
+  "homepage": "https://github.com/ffoksiu/nadiobot#readme"
+}
