@@ -1,18 +1,19 @@
-const { log_giveaways, log_debug, log_warn } = require('../utils');
+const logger = require('../logger');
 
 module.exports = {
-    init: async (client, config) => {
-        log_debug('[Giveaways] Checking giveaways configuration...');
+    init: async (client, config, db_pool) => {
+        logger.give('Giveaways module initialization requested.');
         if (!config.giveaways || !config.giveaways.enabled) {
-            log_warn('[Giveaways] Module disabled in configuration.');
-            log_debug('[Giveaways] Giveaways module initialization skipped.');
+            logger.give('Module disabled in config. Skipping initialization.');
             return;
         }
-        log_giveaways('[Giveaways] Initializing module...');
-        log_debug('[Giveaways] Configuration check passed. Proceeding with initialization.');
-        // Placeholder for giveaway initialization logic
-        log_debug('[Giveaways] Performing placeholder initialization steps for giveaways...');
-        log_giveaways('[Giveaways] Module initialized.');
-        log_debug('[Giveaways] Giveaways module fully initialized and operational.');
+        if (!db_pool) {
+            logger.error('[GIVE] Database connection not available. Giveaways module cannot be initialized.');
+            return;
+        }
+        logger.give('Initializing Giveaways module...');
+        logger.debug('[GIVE] Performing placeholder initialization steps for giveaways system...');
+        logger.give('Giveaways module initialized.');
+        logger.debug('[GIVE] Giveaways module fully initialized and operational.');
     }
-}; 
+};

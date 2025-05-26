@@ -1,41 +1,42 @@
-const { log_db, log_warn, log_error, log_debug } = require('./utils');
 const mysql = require('mysql2/promise');
+const logger = require('./logger');
+
+let db_pool;
 
 module.exports = {
     init: async (client, config) => {
-        log_debug('[Database] Checking database configuration...');
+        logger.db('Database module initialization requested.');
         if (!config.database || !config.database.enabled) {
-            log_warn('[Database] Module disabled in configuration.');
-            log_debug('[Database] Database module initialization skipped.');
-            return;
+            logger.db('Module disabled in config. Skipping initialization.');
+            return null;
         }
-        log_db('[Database] Initializing module...');
-        log_debug('[Database] Configuration check passed. Proceeding with initialization.');
+        logger.db('Initializing Database module...');
         try {
-            log_db('[Database] Attempting to connect to MySQL...');
-            log_debug(`[Database] MySQL host: ${config.database.host}`);
-            log_debug(`[Database] MySQL port: ${config.database.port}`);
-            log_debug(`[Database] MySQL user: ${config.database.user}`);
-            log_debug(`[Database] MySQL database name: ${config.database.database_name}`);
-
-            const connection = await mysql.createConnection({
+            db_pool = mysql.createPool({
                 host: config.database.host,
                 port: config.database.port,
                 user: config.database.user,
                 password: config.database.password,
                 database: config.database.database_name,
+                waitForConnections: true,
+                connectionLimit: 10,
+                queueLimit: 0
             });
-
-            await connection.connect();
-            log_db('[Database] Successfully connected to MySQL database.');
-            client.db = connection;
-
-            log_debug('[Database] MySQL connection stored in client object.');
-            log_db('[Database] Module initialized.');
-            log_debug('[Database] Database module fully initialized.');
+            await db_pool.getConnection();
+            logger.db('MySQL connection pool established and tested successfully.');
+            logger.db('Database module initialized.');
+            return db_pool;
         } catch (e) {
-            log_error(`[Database] Failed to initialize module: ${e.message}`);
-            log_debug(`[Database] Error during database initialization: ${e.stack}`);
+            logger.error(`[DB] Failed to connect to MySQL database: ${e.message}`);
+            logger.error('[DB] Please check your database credentials in config.json and ensure the MySQL server is running.');
+            return null;
         }
+    },
+    get_connection: () => {
+        if (!db_pool) {
+            logger.error('[DB] Database pool is not initialized. Cannot get connection.');
+            return null;
+        }
+        return db_pool;
     }
 };

@@ -1,18 +1,19 @@
-const { log_eco, log_debug, log_warn } = require('../utils');
+const logger = require('../logger');
 
 module.exports = {
-    init: async (client, config) => {
-        log_debug('[Economy] Checking economy configuration...');
+    init: async (client, config, db_pool) => {
+        logger.eco('Economy module initialization requested.');
         if (!config.economy || !config.economy.enabled) {
-            log_warn('[Economy] Module disabled in configuration.');
-            log_debug('[Economy] Economy module initialization skipped.');
+            logger.eco('Module disabled in config. Skipping initialization.');
             return;
         }
-        log_eco('[Economy] Initializing module...');
-        log_debug('[Economy] Configuration check passed. Proceeding with initialization.');
-        // Placeholder as well
-        log_debug('[Economy] Performing placeholder initialization steps...');
-        log_eco('[Economy] Module initialized.');
-        log_debug('[Economy] Economy module fully initialized and operational.');
+        if (!db_pool) {
+            logger.error('[ECO] Database connection not available. Economy module cannot be initialized.');
+            return;
+        }
+        logger.eco('Initializing Economy module...');
+        logger.debug('[ECO] Performing placeholder initialization steps for economy system...');
+        logger.eco('Economy module initialized.');
+        logger.debug('[ECO] Economy module fully initialized and operational.');
     }
-}; 
+};

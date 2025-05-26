@@ -40,7 +40,15 @@
     "database_name": "bot_database"
   },
   "text_levels": {
-    "enabled": false
+    "enabled": true,
+    "xp_gain_per_message": 10,
+    "xp_cooldown_seconds": 60,
+    "level_up_formula": "5 * {level} * {level} + 50 * {level} + 100",
+    "level_up_channel_id": null,
+    "level_up_embed_title": "🎉 Level Up!",
+    "level_up_embed_color": "#00FF00",
+    "level_up_embed_content": "Congratulations, {user.name}! You've reached **Level {level}**!",
+    "level_up_embed_footer": "User ID: {user.id} | Time: {time}"
   },
   "voice_levels": {
     "enabled": false

@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const { Client, IntentsBitField, ActivityType } = require('discord.js');
 const fs = require('fs');
-const { log_info, log_warn, log_error, log_debug } = require('./utils');
+const logger = require('./logger');
 
 const databaseModule = require('./database');
 const textLevelsModule = require('./levels/textlevels');
@@ -12,30 +12,29 @@ const moderationModule = require('./moderative/moderation');
 const giveawaysModule = require('./utils/giveaways');
 const logsModule = require('./moderative/logs');
 
+logger.debug('Starting bot initialization process.');
+
 let config;
 try {
-    log_debug('[Main] Attempting to read configuration file...');
+    logger.debug('Attempting to read config.json file.');
     const configFile = fs.readFileSync('./config.json', 'utf8');
-    log_debug('[Main] Configuration file read. Attempting to parse JSON...');
+    logger.debug('Config file read successfully. Parsing JSON.');
     config = JSON.parse(configFile);
-    log_info('Configuration loaded successfully from config.json.');
-    log_debug('[Main] Configuration JSON parsed successfully.');
+    logger.info('Configuration loaded successfully from config.json.');
 } catch (error) {
-    log_error(`Could not load or parse config.json. Detailed error: ${error.message}`);
-    log_debug(`[Main] Error details during config load: ${error.stack}`);
-    log_error('Please ensure config.json exists in container directory. If you accidentally deleted config just copy paste config_default.json. If you\'ve deleted that as well, check https://github.com/ffoksiu/nadiobot/releases');
+    logger.error(`Could not load or parse config.json: ${error.message}`);
+    logger.error('Please ensure config.json exists in container directory. If you accidentally deleted config just copy paste config_default.json. If you\'ve deleted that as well, check https://github.com/ffoksiu/nadiobot/releases');
     process.exit(1);
 }
 
-log_debug('[Main] Reading Discord bot token from environment variables...');
 const token = process.env.DISCORD_BOT_TOKEN;
 if (!token || token === 'YOUR_BOT_TOKEN_GOES_HERE' || token.length < 20) {
-    log_error('Discord bot token is missing or invalid in the .env file.');
-    log_debug(`[Main] Invalid token found: ${token ? 'Token present but invalid' : 'Token not found'}`);
-    log_error('Please check your .env file and ensure discord bot token is correctly set.');
+    logger.error('Discord bot token is missing or invalid in the .env file.');
+    logger.error('Please check your .env file and ensure discord bot token is correctly set.');
+    logger.debug('Token validation failed. Exiting process.');
     process.exit(1);
 }
-log_debug('[Main] Discord bot token validated.');
+logger.debug('Discord bot token validated successfully.');
 
 const activityTypeMap = {
     "Playing": ActivityType.Playing,
@@ -45,126 +44,136 @@ const activityTypeMap = {
     "Competing": ActivityType.Competing,
     "Custom": ActivityType.Custom
 };
-log_debug('[Main] ActivityType map initialized.');
 
+logger.debug('Initializing Discord.js client with specified intents.');
 const client = new Client({
     intents: [
         IntentsBitField.Flags.Guilds,
-        IntentsBitField.Flags.GuildPresences
+        IntentsBitField.Flags.GuildPresences,
+        IntentsBitField.Flags.GuildMessages,
+        IntentsBitField.Flags.MessageContent,
+        IntentsBitField.Flags.GuildVoiceStates
     ],
 });
-log_debug('[Main] Discord client initialized with specified intents.');
+logger.debug('Discord.js client initialized.');
 
 let currentStatusIndex = 0;
 const statusIntervalMs = (config.main.status_change_interval_seconds || 10) * 1000;
-log_debug(`[Main] Bot status update interval set to ${statusIntervalMs}ms.`);
+logger.debug(`Status change interval set to ${statusIntervalMs / 1000} seconds.`);
 
 function updateBotStatus() {
-    log_debug(`[Status] Attempting to update bot status. Current index: ${currentStatusIndex}`);
+    logger.debug('Attempting to update bot status.');
     const statusData = config.main.bot_statuses[currentStatusIndex];
 
-    if (!statusData || !activityTypeMap[statusData.activity_type]) {
-        log_warn(`[Status] Invalid status definition at index ${currentStatusIndex} in config.json. Skipping.`);
-        log_debug(`[Status] Invalid status data: ${JSON.stringify(statusData)}`);
+    if (!statusData) {
+        logger.warn(`[Status] No status data found for index ${currentStatusIndex}. This might indicate an empty or invalid bot_statuses array.`);
         currentStatusIndex = (currentStatusIndex + 1) % config.main.bot_statuses.length;
-        log_debug(`[Status] New status index: ${currentStatusIndex}`);
+        if (config.main.bot_statuses.length === 0) {
+            logger.error('[Status] No statuses defined in config.json. Bot will not display any custom status.');
+            return;
+        }
+    }
+
+    if (!activityTypeMap[statusData.activity_type]) {
+        logger.warn(`[Status] Invalid activity_type "${statusData.activity_type}" found for status at index ${currentStatusIndex}. Skipping this status.`);
+        currentStatusIndex = (currentStatusIndex + 1) % config.main.bot_statuses.length;
         return;
     }
 
     const activityOptions = { type: activityTypeMap[statusData.activity_type] };
-    log_debug(`[Status] Base activity options: ${JSON.stringify(activityOptions)} for activity: ${statusData.activity_name}`);
+    logger.debug(`[Status] Processing status: Type: ${statusData.activity_type}, Name: ${statusData.activity_name}`);
 
     if (statusData.activity_type === "Streaming") {
         if (statusData.stream_url) {
             activityOptions.url = statusData.stream_url;
-            log_debug(`[Status] Streaming URL set: ${statusData.stream_url}`);
+            logger.debug(`[Status] Streaming status with URL: ${statusData.stream_url}`);
         } else {
-            log_warn(`[Status] "Streaming" status at index ${currentStatusIndex} requires "stream_url", but it's missing. Skipping.`);
-            log_debug(`[Status] Missing stream_url for streaming status: ${JSON.stringify(statusData)}`);
+            logger.warn(`[Status] "Streaming" status at index ${currentStatusIndex} requires "stream_url", but it's missing. Skipping this status.`);
             currentStatusIndex = (currentStatusIndex + 1) % config.main.bot_statuses.length;
-            log_debug(`[Status] New status index after streaming skip: ${currentStatusIndex}`);
             return;
         }
-    }
-    else if (statusData.stream_url && statusData.activity_type !== "Streaming") {
-        log_warn(`[Status] "stream_url" provided for non-streaming status at index ${currentStatusIndex}. It will be ignored.`);
-        log_debug(`[Status] stream_url ignored for non-streaming activity: ${statusData.activity_type}`);
+    } else if (statusData.stream_url) {
+        logger.warn(`[Status] "stream_url" provided for non-streaming status at index ${currentStatusIndex}. It will be ignored.`);
     }
 
-    try {
-        client.user.setActivity(statusData.activity_name, activityOptions);
-        log_info(`[Status] Changed status to: ${statusData.activity_type} - ${statusData.activity_name}`);
-        log_debug(`[Status] Successfully set activity: ${statusData.activity_name}, options: ${JSON.stringify(activityOptions)}`);
-    } catch (error) {
-        log_error(`[Status] Failed to set activity: ${error.message}`);
-        log_debug(`[Status] Error setting activity: ${error.stack}`);
-    }
+    client.user.setActivity(statusData.activity_name, activityOptions);
+    logger.main(`[Status] Changed status to: ${statusData.activity_type} - ${statusData.activity_name}`);
 
     currentStatusIndex = (currentStatusIndex + 1) % config.main.bot_statuses.length;
-    log_debug(`[Status] Updated status index to: ${currentStatusIndex}`);
 }
 
 client.once('ready', async () => {
-    log_info(`${config.main.bot_name || 'Your Bot'} is online! Logged in as ${client.user.tag}`);
-    log_debug(`[Main] Client ready event triggered. Bot Name: ${config.main.bot_name || 'Your Bot'}, User Tag: ${client.user.tag}`);
+    logger.info(`${config.main.bot_name || 'Your Bot'} is online! Logged in as ${client.user.tag}`);
     
-    log_debug('[Main] Initial bot status update call.');
+    logger.debug('Setting initial bot status.');
     updateBotStatus();
-    log_debug('[Main] Setting up interval for bot status updates.');
+    logger.debug('Starting status rotation interval.');
     setInterval(updateBotStatus, statusIntervalMs);
 
+    logger.debug('Preparing to load modules.');
+
+    let db_pool = null;
+    if (config.database && config.database.enabled) {
+        logger.debug('Attempting to initialize Database module.');
+        db_pool = await databaseModule.init(client, config);
+        if (db_pool) {
+            logger.debug('Database module initialization completed successfully.');
+        } else {
+            logger.error('Database module failed to initialize. Dependent modules might not function.');
+        }
+    } else {
+        logger.info('[Database] Module disabled. Skipping database initialization.');
+    }
+    
     const modulesToLoad = [
-        { name: 'Database', module: databaseModule, config_section: config.database },
-        { name: 'Text Levels', module: textLevelsModule, config_section: config.text_levels },
-        { name: 'Voice Levels', module: voiceLevelsModule, config_section: config.voice_levels },
-        { name: 'Economy', module: economyModule, config_section: config.economy },
-        { name: 'Moderation', module: moderationModule, config_section: config.moderation },
-        { name: 'Logs', module: logsModule, config_section: config.logs },
-        { name: 'Giveaways', module: giveawaysModule, config_section: config.giveaways }
+        { name: 'Text Levels', module: textLevelsModule, config_section: config.text_levels, logger: logger.tls },
+        { name: 'Voice Levels', module: voiceLevelsModule, config_section: config.voice_levels, logger: logger.vls },
+        { name: 'Economy', module: economyModule, config_section: config.economy, logger: logger.eco },
+        { name: 'Moderation', module: moderationModule, config_section: config.moderation, logger: logger.mod },
+        { name: 'Logs', module: logsModule, config_section: config.logs, logger: logger.logs },
+        { name: 'Giveaways', module: giveawaysModule, config_section: config.giveaways, logger: logger.give }
     ];
-    log_debug(`[Main] Modules to load: ${JSON.stringify(modulesToLoad.map(m => m.name))}`);
 
     for (const moduleInfo of modulesToLoad) {
-        log_debug(`[Main] Processing module: ${moduleInfo.name}`);
+        logger.debug(`Checking initialization for ${moduleInfo.name} module.`);
         if (moduleInfo.config_section && moduleInfo.config_section.enabled) {
-            log_debug(`[Main] Module ${moduleInfo.name} is enabled in config. Attempting initialization.`);
             try {
-                await moduleInfo.module.init(client, config); 
-                log_debug(`[Main] Module ${moduleInfo.name} initialized successfully.`);
+                logger.debug(`Attempting to initialize ${moduleInfo.name} module.`);
+                await moduleInfo.module.init(client, config, db_pool); 
+                logger.debug(`${moduleInfo.name} module initialization completed.`);
             } catch (e) {
-                log_error(`[${moduleInfo.name}] Failed to initialize module: ${e.message}`);
-                log_debug(`[${moduleInfo.name}] Initialization error stack: ${e.stack}`);
+                logger.error(`[${moduleInfo.name}] Failed to initialize module: ${e.message}`);
+                logger.debug(`[${moduleInfo.name}] Initialization failed for unknown reason: ${e.stack}`);
             }
         } else {
-            log_info(`[${moduleInfo.name}] Module disabled or configuration section missing. Skipping initialization.`);
-            log_debug(`[Main] Module ${moduleInfo.name} skipped. Config section: ${JSON.stringify(moduleInfo.config_section)}`);
+            logger.info(`[${moduleInfo.name}] Module disabled or configuration section missing. Skipping initialization.`);
+            logger.debug(`[${moduleInfo.name}] Module skipped due to config settings.`);
         }
     }
-    log_debug('[Main] All modules processed.');
+    logger.debug('All modules processing complete.');
 });
 
-log_debug('[Main] Attempting to log in the bot...');
+logger.debug('Attempting to log in Discord client.');
 client.login(token)
-    .then(() => {
-        log_debug('[Main] Bot login successful.');
-    })
     .catch(error => {
-        log_error('Failed to log in the bot. Please check:');
-        log_error('1. Is the Discord bot token in .env file correct?');
-        log_error('2. Is "PRESENCE_INTENT" enabled in the Discord Developer Portal (Bot section)?');
-        log_error('3. Make sure that points above are fulfilled. Otherwise, refer to detailed error below. If nothing helps, consider getting support from frozxic@discord.');
-        log_error(`Detailed error: ${error.message}`);
-        log_debug(`[Main] Bot login error: ${error.stack}`);
+        logger.error('Failed to log in the bot. Please check:');
+        logger.error('1. Is the Discord bot token in .env file correct?');
+        logger.error('2. Is "PRESENCE_INTENT" and "MESSAGE_CONTENT_INTENT" enabled in the Discord Developer Portal (Bot section)?');
+        logger.error('3. Make sure that points above are fulfilled. Otherwise, refer to detailed error below. If nothing helps, consider getting support from frozxic@discord.');
+        logger.error(`Detailed error: ${error.message}`);
+        logger.debug('Bot login failed. Exiting process.');
         process.exit(1);
     });
 
+logger.debug('Setting up process error handlers.');
 process.on('unhandledRejection', error => {
-    log_error(`Unhandled promise rejection: ${error}`);
-    log_debug(`[Process] Unhandled rejection details: ${error.stack || 'No stack available'}`);
+    logger.error(`Unhandled promise rejection: ${error.stack || error}`);
+    logger.debug('Process received unhandled rejection. Logging error.');
 });
 
 process.on('uncaughtException', error => {
-    log_error(`Uncaught exception: ${error}`);
-    log_debug(`[Process] Uncaught exception details: ${error.stack}`);
+    logger.error(`Uncaught exception: ${error.stack || error}`);
+    logger.debug('Process received uncaught exception. Exiting process.');
     process.exit(1);
 });
+logger.debug('Bot initialization process finished.');
