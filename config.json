@@ -1,0 +1,68 @@
+{
+  "main": {
+    "bot_name": "Absolutely Epic Bot",
+    "status_change_interval_seconds": 10,
+    "bot_statuses": [
+      {
+        "activity_type": "Playing",
+        "activity_name": "with myself"
+      },
+      {
+        "activity_type": "Watching",
+        "activity_name": "You."
+      },
+      {
+        "activity_type": "Listening",
+        "activity_name": "to Myslovitz"
+      },
+      {
+        "activity_type": "Competing",
+        "activity_name": "in Brawl Stars"
+      },
+      {
+        "activity_type": "Streaming",
+        "activity_name": "on Twitch",
+        "stream_url": "https://twitch.tv/balls"
+      },
+      {
+        "activity_type": "Custom",
+        "activity_name": "i love natalka"
+      }
+    ],
+    "command_prefix": "!"
+  },
+  "database": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "root",
+    "password": "password",
+    "database_name": "bot_database"
+  },
+  "text_levels": {
+    "enabled": true,
+    "xp_gain_per_message": 10,
+    "xp_cooldown_seconds": 60,
+    "level_up_formula": "5 * {level} * {level} + 50 * {level} + 100",
+    "level_up_channel_id": null,
+    "level_up_embed_title": "🎉 Level Up!",
+    "level_up_embed_color": "#00FF00",
+    "level_up_embed_content": "Congratulations, {user.name}! You've reached **Level {level}**!",
+    "level_up_embed_footer": "User ID: {user.id} | Time: {time}"
+  },
+  "voice_levels": {
+    "enabled": false
+  },
+  "economy": {
+    "enabled": false
+  },
+  "moderation": {
+    "enabled": false
+  },
+  "logs": {
+    "enabled": false
+  },
+  "giveaways": {
+    "enabled": false
+  }
+}
