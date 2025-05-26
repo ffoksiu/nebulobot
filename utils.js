@@ -61,8 +61,53 @@ function log_error(message) {
     log_message('error', message, 'red', 'red');
 }
 
+function log_debug(message) {
+    log_message('debug', message, 'white', 'blue');
+}
+
+function log_text(message) {
+    log_message('text', message, 'white', 'green');
+}
+
+function log_voice(message) {
+    log_message('voice', message, 'white', 'magenta');
+}
+
+function log_eco(message) {
+    log_message('eco', message, 'white', 'yellow');
+}
+
+function log_logs(message) {
+    log_message('logs', message, 'white', 'cyan');
+}
+
+function log_fun(message) {
+    log_message('fun', message, 'white', 'green');
+}
+
+function log_mods(message) {
+    log_message('mods', message, 'white', 'blue');
+}
+
+function log_giveaways(message) {
+    log_message('give', message, 'white', 'magenta');
+}
+
+function log_db(message) {
+    log_message('db', message, 'white', 'yellow');
+}
+
 module.exports = {
     log_info,
     log_warn,
-    log_error
+    log_error,
+    log_debug,
+    log_text,
+    log_voice,
+    log_eco,
+    log_logs,
+    log_fun,
+    log_mods,
+    log_giveaways,
+    log_db
 };

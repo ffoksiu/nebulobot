@@ -16,5 +16,9 @@
   "bugs": {
     "url": "https://github.com/ffoksiu/nadiobot/issues"
   },
-  "homepage": "https://github.com/ffoksiu/nadiobot#readme"
+  "homepage": "https://github.com/ffoksiu/nadiobot#readme",
+  "dependencies": {
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.5.0"
+  }
 }
