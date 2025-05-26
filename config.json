@@ -33,8 +33,11 @@
   },
   "database": {
     "enabled": true,
-    "type": "sqlite",
-    "sqlite_file": "./data/bot_database.sqlite"
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "root",
+    "password": "password",
+    "database_name": "bot_database"
   },
   "text_levels": {
     "enabled": false

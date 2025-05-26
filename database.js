@@ -1,4 +1,5 @@
 const { log_db, log_warn, log_error, log_debug } = require('./utils');
+const mysql = require('mysql2/promise');
 
 module.exports = {
     init: async (client, config) => {
@@ -11,16 +12,25 @@ module.exports = {
         log_db('[Database] Initializing module...');
         log_debug('[Database] Configuration check passed. Proceeding with initialization.');
         try {
-            log_debug(`[Database] Database type from config: ${config.database.type}`);
-            if (config.database.type === 'sqlite') {
-                log_db(`[Database] Attempting to connect to SQLite: ${config.database.sqlite_file}`);
-                log_debug(`[Database] SQLite file path: ${config.database.sqlite_file}`);
-                // Placeholder for actual SQLite connection logic
-                log_debug('[Database] Placeholder: Simulating SQLite connection setup...');
-            } else {
-                log_warn(`[Database] Unsupported database type: ${config.database.type}. Skipping connection.`);
-                log_debug(`[Database] Database connection skipped due to unsupported type: ${config.database.type}`);
-            }
+            log_db('[Database] Attempting to connect to MySQL...');
+            log_debug(`[Database] MySQL host: ${config.database.host}`);
+            log_debug(`[Database] MySQL port: ${config.database.port}`);
+            log_debug(`[Database] MySQL user: ${config.database.user}`);
+            log_debug(`[Database] MySQL database name: ${config.database.database_name}`);
+
+            const connection = await mysql.createConnection({
+                host: config.database.host,
+                port: config.database.port,
+                user: config.database.user,
+                password: config.database.password,
+                database: config.database.database_name,
+            });
+
+            await connection.connect();
+            log_db('[Database] Successfully connected to MySQL database.');
+            client.db = connection;
+
+            log_debug('[Database] MySQL connection stored in client object.');
             log_db('[Database] Module initialized.');
             log_debug('[Database] Database module fully initialized.');
         } catch (e) {
