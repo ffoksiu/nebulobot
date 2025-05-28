@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const { Client, IntentsBitField, ActivityType } = require('discord.js');
+const { Client, IntentsBitField, ActivityType, Collection } = require('discord.js');
 const fs = require('fs');
 const logger = require('./logger');
 
@@ -11,6 +11,9 @@ const economyModule = require('./utils/economy');
 const moderationModule = require('./moderative/moderation');
 const giveawaysModule = require('./utils/giveaways');
 const logsModule = require('./moderative/logs');
+
+const textLevelsCommands = require('./levels/textlevels-commands');
+const voiceLevelsCommands = require('./levels/voicelevels-commands');
 
 logger.debug('Starting bot initialization process.');
 
@@ -56,6 +59,10 @@ const client = new Client({
     ],
 });
 logger.debug('Discord.js client initialized.');
+
+client.commands = new Collection();
+
+const activeModulesWithShutdown = [];
 
 let currentStatusIndex = 0;
 const statusIntervalMs = (config.main.status_change_interval_seconds || 10) * 1000;
@@ -140,6 +147,9 @@ client.once('ready', async () => {
             try {
                 logger.debug(`Attempting to initialize ${moduleInfo.name} module.`);
                 await moduleInfo.module.init(client, config, db_pool); 
+                if (typeof moduleInfo.module.shutdown === 'function') {
+                    activeModulesWithShutdown.push(moduleInfo.module);
+                }
                 logger.debug(`${moduleInfo.name} module initialization completed.`);
             } catch (e) {
                 logger.error(`[${moduleInfo.name}] Failed to initialize module: ${e.message}`);
@@ -150,7 +160,79 @@ client.once('ready', async () => {
             logger.debug(`[${moduleInfo.name}] Module skipped due to config settings.`);
         }
     }
-    logger.debug('All modules processing complete.');
+    logger.debug('All base modules processed. Now loading command modules...');
+
+    const commandModules = [
+        textLevelsCommands,
+        voiceLevelsCommands
+    ];
+
+    for (const cmdModule of commandModules) {
+        cmdModule.init(config, db_pool);
+        client.commands.set(cmdModule.commandName, cmdModule);
+        logger.debug(`Loaded command module: ${cmdModule.commandName}`);
+    }
+
+    const commandsToDeploy = [];
+    for (const cmdDeployment of config.commands_deployment || []) {
+        const module = client.commands.get(cmdDeployment.base_command_name);
+        if (module && module.commandDefinition) {
+            commandsToDeploy.push(module.commandDefinition.toJSON());
+        } else {
+            logger.error(`Command module for ${cmdDeployment.module_name} (${cmdDeployment.base_command_name}) not found or not initialized for deployment.`);
+        }
+    }
+
+    if (commandsToDeploy.length > 0) {
+        for (const cmdDeployment of config.commands_deployment || []) {
+            const commandData = commandsToDeploy.find(cmd => cmd.name === cmdDeployment.base_command_name);
+            if (!commandData) continue;
+
+            if (cmdDeployment.register_globally) {
+                await client.application.commands.create(commandData);
+                logger.info(`Registered global command: /${cmdDeployment.base_command_name}`);
+            } else if (cmdDeployment.guild_ids && cmdDeployment.guild_ids.length > 0) {
+                for (const guildId of cmdDeployment.guild_ids) {
+                    const guild = client.guilds.cache.get(guildId);
+                    if (guild) {
+                        await guild.commands.create(commandData);
+                        logger.info(`Registered guild command: /${cmdDeployment.base_command_name} for guild ${guild.name} (${guildId})`);
+                    } else {
+                        logger.warn(`Guild ${guildId} not found for command deployment: /${cmdDeployment.base_command_name}`);
+                    }
+                }
+            } else {
+                logger.warn(`Command /${cmdDeployment.base_command_name} is configured for neither global nor specific guilds. It will not be deployed.`);
+            }
+        }
+    } else {
+        logger.info('No slash commands to deploy based on configuration.');
+    }
+    logger.debug('All modules and commands processed. Bot ready.');
+});
+
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    const commandModule = client.commands.get(interaction.commandName);
+
+    if (!commandModule) {
+        logger.warn(`No handler found for command: ${interaction.commandName}`);
+        await interaction.reply({ content: 'This command is not yet implemented or loaded.', ephemeral: true });
+        return;
+    }
+
+    try {
+        await commandModule.handleInteraction(interaction, db_pool, config);
+    } catch (error) {
+        logger.error(`Error executing command ${interaction.commandName}: ${error.message}`);
+        logger.debug(error.stack);
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: 'There was an error while executing this command!', ephemeral: true });
+        } else {
+            await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+        }
+    }
 });
 
 logger.debug('Attempting to log in Discord client.');
@@ -176,4 +258,21 @@ process.on('uncaughtException', error => {
     logger.debug('Process received uncaught exception. Exiting process.');
     process.exit(1);
 });
+
+process.on('SIGINT', async () => {
+    logger.info('Shutting down...');
+    if (db_pool) {
+        await db_pool.end();
+        logger.info('Database pool closed.');
+    }
+    for (const mod of activeModulesWithShutdown) {
+        if (typeof mod.shutdown === 'function') {
+            await mod.shutdown();
+        }
+    }
+    client.destroy();
+    logger.info('Bot gracefully shut down.');
+    process.exit(0);
+});
+
 logger.debug('Bot initialization process finished.');
