@@ -126,6 +126,21 @@
   "giveaways": {
     "enabled": false
   },
+  "admin": {
+    "enabled": true,
+    "config_editor_roles": [],
+    "config_editor_users": [],
+    "messages": {
+      "no_permission": "You do not have permission to use this command.",
+      "config_view_success": "Config value for `{path}`: ```json\n{value}\n```",
+      "config_view_not_found": "Path `{path}` not found in config.",
+      "config_edit_success": "Config value for `{path}` updated to `{value}`. Restart bot for full effect if not automatically reloaded.",
+      "config_edit_fail_parse": "Failed to parse value for `{path}`. Ensure it's valid JSON for objects/arrays, or true/false for booleans, or a number.",
+      "config_edit_fail_write": "Failed to write config to file: {error}",
+      "config_reload_success": "Configuration reloaded from file. Changes might take effect immediately.",
+      "config_reload_fail": "Failed to reload config from file: {error}"
+    }
+  },
   "commands_deployment": [
     {
       "module_name": "text_levels",
@@ -140,6 +155,13 @@
       "base_command_description": "Manages voice-based leveling for the guild.",
       "register_globally": false,
       "guild_ids": []
+    },
+    {
+      "module_name": "admin",
+      "base_command_name": "config",
+      "base_command_description": "Administrator commands for managing bot configuration.",
+      "register_globally": false,
+      "guild_ids": [] 
     }
   ]
 }
