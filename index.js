@@ -16,6 +16,8 @@ const logsModule = require('./moderative/logs');
 const textLevelsCommands = require('./levels/textlevels-commands');
 const voiceLevelsCommands = require('./levels/voicelevels-commands');
 const adminCommands = require('./admin/admin-commands');
+const ticketsModule = require('./moderative/tickets');
+const ticketsCommands = require('./moderative/tickets-commands');
 
 logger.debug('Starting bot initialization process.');
 
@@ -140,7 +142,8 @@ client.once('ready', async () => {
         { name: 'Economy', module: economyModule, config_section: config.economy, logger_func: logger.eco },
         { name: 'Moderation', module: moderationModule, config_section: config.moderation, logger_func: logger.mod },
         { name: 'Logs', module: logsModule, config_section: config.logs, logger_func: logger.logs },
-        { name: 'Giveaways', module: giveawaysModule, config_section: config.giveaways, logger_func: logger.give }
+        { name: 'Giveaways', module: giveawaysModule, config_section: config.giveaways, logger_func: logger.give },
+        { name: 'Tickets', module: ticketsModule, config_section: config.tickets, logger_func: logger.tickets }
     ];
 
     for (const moduleInfo of modulesToLoad) {
@@ -173,6 +176,12 @@ client.once('ready', async () => {
         logger.debug('Admin commands module added for loading.');
     } else {
         logger.info('[Admin] Module disabled. Skipping admin commands initialization.');
+    }
+    if (config.tickets && config.tickets.enabled) {
+        commandModules.push(ticketsCommands);
+        logger.debug('Tickets commands module added for loading.');
+    } else {
+        logger.info('[Tickets] Module disabled. Skipping tickets commands initialization.');
     }
 
 

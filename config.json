@@ -141,6 +141,122 @@
       "config_reload_fail": "Failed to reload config from file: {error}"
     }
   },
+  "tickets": {
+    "enabled": true,
+    "panel_channel_id": null,
+    "ticket_category_id": null,
+    "support_role_ids": [],
+    "management_role_ids": [],
+    "transcripts_channel_id": null,
+    "channel_naming_template": "{emoji}-{type_id}-{username}-{user_id}",
+    "close_confirmation_timeout_seconds": 60,
+    "ticket_types": [
+      {
+        "id": "GEN",
+        "name": "General Support",
+        "emoji": "❔",
+        "button_style": "Primary",
+        "is_restricted": false,
+        "default_priority": "Medium",
+        "modal_fields": [
+          {
+            "custom_id": "issue_summary",
+            "label": "Briefly describe your issue:",
+            "style": "Short",
+            "required": true,
+            "min_length": 10,
+            "max_length": 100
+          },
+          {
+            "custom_id": "detailed_description",
+            "label": "Provide a detailed description:",
+            "style": "Paragraph",
+            "required": true,
+            "min_length": 20,
+            "max_length": 1000
+          }
+        ]
+      },
+      {
+        "id": "REP",
+        "name": "Report User",
+        "emoji": "🚨",
+        "button_style": "Danger",
+        "is_restricted": false,
+        "default_priority": "High",
+        "modal_fields": [
+          {
+            "custom_id": "reported_user",
+            "label": "Who are you reporting? (User ID or Name)",
+            "style": "Short",
+            "required": true,
+            "min_length": 3,
+            "max_length": 50
+          },
+          {
+            "custom_id": "report_reason",
+            "label": "What rule did they break? (Be specific)",
+            "style": "Paragraph",
+            "required": true,
+            "min_length": 20,
+            "max_length": 1000
+          },
+          {
+            "custom_id": "evidence_link",
+            "label": "Link to evidence (optional)",
+            "style": "Short",
+            "required": false,
+            "max_length": 200
+          }
+        ]
+      },
+      {
+        "id": "MNG",
+        "name": "Management Contact",
+        "emoji": "👑",
+        "button_style": "Secondary",
+        "is_restricted": true,
+        "default_priority": "Critical",
+        "modal_fields": [
+          {
+            "custom_id": "management_issue",
+            "label": "What is your management-related issue?",
+            "style": "Paragraph",
+            "required": true,
+            "min_length": 50,
+            "max_length": 1500
+          }
+        ]
+      }
+    ],
+    "messages": {
+      "ticket_panel_embed_title": "Need Help? Open a Ticket!",
+      "ticket_panel_embed_description": "Click the button below that best suits your needs. A private channel will be created where you can talk with our staff.",
+      "ticket_opened_success": "Your ticket {channel} has been created! Please describe your issue there.",
+      "ticket_already_open": "You already have an open ticket: {channel}.",
+      "ticket_channel_initial_message_content": "{ping_roles} {creator_ping} Your ticket has been created. A staff member will be with you shortly.\n\nTicket Type: **{ticket_type_name}**\nPriority: **{priority}**\n\n**Details from your submission:**\n{modal_data_embed_fields}\n\nTo close this ticket, use the `/ticket close` command.",
+      "ticket_closed_confirmation_prompt": "{closer_ping} Are you sure you want to close this ticket? {creator_ping} (Ticket creator: {creator.username}) Click the button to confirm.",
+      "ticket_closed_confirmation_button_label": "Confirm Close",
+      "ticket_closed_success": "Ticket {channel} has been closed by {closer.username}. Transcript saved to {transcript_channel}.",
+      "ticket_closed_no_transcript": "Ticket {channel} has been closed by {closer.username}.",
+      "ticket_closed_by_creator": "Ticket {channel} has been closed by its creator {closer.username}.",
+      "ticket_close_access_denied": "Only the ticket creator or a management member can confirm closing this ticket.",
+      "ticket_close_timeout": "Ticket close confirmation timed out. Please try `/ticket close` again.",
+      "ticket_transcript_header": "Ticket Transcript - {ticket_id} | Type: {ticket_type_name} | Created by: {creator.username} | Closed by: {closer.username} | Opened: {open_time} | Closed: {close_time} | Priority: {priority}\n\n",
+      "ticket_no_permission": "You do not have permission to use this command in this channel.",
+      "ticket_not_ticket_channel": "This command can only be used in a ticket channel.",
+      "ticket_add_member_success": "{user} has been added to the ticket by {moderator}.",
+      "ticket_remove_member_success": "{user} has been removed from the ticket by {moderator}.",
+      "ticket_member_already_in_ticket": "{user} is already in this ticket.",
+      "ticket_member_not_in_ticket": "{user} is not in this ticket.",
+      "ticket_priority_set": "Ticket priority set to **{priority}** by {moderator}.",
+      "ticket_priority_invalid": "Invalid priority level. Available: Low, Medium, High, Critical.",
+      "ticket_info_embed_title": "Ticket Information - {ticket_id}",
+      "ticket_info_embed_description": "Opened by: {creator.username}\nTicket Type: {ticket_type_name}\nStatus: {status}\nPriority: {priority}\nOpened at: {open_time}\nChannel: {channel}",
+      "setup_panel_success": "Ticket panel set up successfully in {channel}.",
+      "config_update_success": "Ticket configuration for '{setting}' updated to '{value}'."
+    }
+  },
   "commands_deployment": [
     {
       "module_name": "text_levels",
@@ -160,6 +276,13 @@
       "module_name": "admin",
       "base_command_name": "config",
       "base_command_description": "Administrator commands for managing bot configuration.",
+      "register_globally": false,
+      "guild_ids": [] 
+    },
+    {
+      "module_name": "tickets",
+      "base_command_name": "ticket",
+      "base_command_description": "Manage support tickets.",
       "register_globally": false,
       "guild_ids": [] 
     }

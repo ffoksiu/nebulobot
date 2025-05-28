@@ -38,11 +38,14 @@ const tag_colors = {
     eco: 'green',
     mod: 'red',
     give: 'cyan',
-    logs: 'magenta'
+    logs: 'magenta',
+    admin: 'white',
+    tickets: 'cyanBright'
 };
 
 colors.yellowBright = "\x1b[93m";
 colors.blueBright = "\x1b[94m";
+colors.cyanBright = "\x1b[96m";
 
 const roman_months = [
     '', 'I', 'II', 'III', 'IV', 'V', 'VI',
@@ -82,6 +85,8 @@ const logger = {
     mod: (message) => log_message('mod', message),
     give: (message) => log_message('give', message),
     logs: (message) => log_message('logs', message),
+    admin: (message) => log_message('admin', message),
+    tickets: (message) => log_message('tickets', message),
 
     time_get: time_get 
 };
