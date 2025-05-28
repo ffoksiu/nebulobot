@@ -148,8 +148,15 @@
     "support_role_ids": [],
     "management_role_ids": [],
     "transcripts_channel_id": null,
-    "channel_naming_template": "{emoji}-{type_id}-{username}-{user_id}",
+    "channel_naming_template": "{status_emoji}-{type_id}-{username}-{user_id}",
     "close_confirmation_timeout_seconds": 60,
+    "ticket_statuses": {
+      "Open": { "emoji": "🟢", "color": "Green" },
+      "WaitingForCreator": { "emoji": "🟡", "color": "Yellow" },
+      "AwaitingResponse": { "emoji": "🟠", "color": "Orange" },
+      "Escalated": { "emoji": "🟣", "color": "Purple" },
+      "Closed": { "emoji": "⚫", "color": "Black" }
+    },
     "ticket_types": [
       {
         "id": "GEN",
@@ -203,7 +210,7 @@
           },
           {
             "custom_id": "69",
-            "label": "are you sure youre down for that",
+            "label": "are u sure",
             "style": "Short",
             "required": false,
             "max_length": 200
@@ -234,7 +241,7 @@
       "ticket_panel_embed_description": "Click the button below that best suits your needs. A private channel will be created where you can talk with our staff.",
       "ticket_opened_success": "Your ticket {channel} has been created! Please describe your issue there.",
       "ticket_already_open": "You already have an open ticket: {channel}.",
-      "ticket_channel_initial_message_content": "{ping_roles} {creator_ping} Your ticket has been created. A staff member will be with you shortly.\n\nTicket Type: **{ticket_type_name}**\nPriority: **{priority}**\n\n**Details from your submission:**\n{modal_data_embed_fields}\n\nTo close this ticket, use the `/ticket close` command.",
+      "ticket_channel_initial_message_content": "{ping_roles} {creator_ping} Your ticket has been created. A staff member will be with you shortly.\n\nTicket Type: **{ticket_type_name}**\nPriority: **{priority}**\nStatus: **{status_name}**\n\n**Details from your submission:**\n{modal_data_embed_fields}\n\nTo close this ticket, use the `/ticket close` command.",
       "ticket_closed_confirmation_prompt": "{closer_ping} Are you sure you want to close this ticket? {creator_ping} (Ticket creator: {creator.username}) Click the button to confirm.",
       "ticket_closed_confirmation_button_label": "Confirm Close",
       "ticket_closed_success": "Ticket {channel} has been closed by {closer.username}. Transcript saved to {transcript_channel}.",
@@ -242,7 +249,7 @@
       "ticket_closed_by_creator": "Ticket {channel} has been closed by its creator {closer.username}.",
       "ticket_close_access_denied": "Only the ticket creator or a management member can confirm closing this ticket.",
       "ticket_close_timeout": "Ticket close confirmation timed out. Please try `/ticket close` again.",
-      "ticket_transcript_header": "Ticket Transcript - {ticket_id} | Type: {ticket_type_name} | Created by: {creator.username} | Closed by: {closer.username} | Opened: {open_time} | Closed: {close_time} | Priority: {priority}\n\n",
+      "ticket_transcript_header": "Ticket Transcript - {ticket_id} | Type: {ticket_type_name} | Created by: {creator.username} | Closed by: {closer.username} | Opened: {open_time} | Closed: {close_time} | Priority: {priority} | Status: {status_name} | Claimed by: {claimer.username}\n\n",
       "ticket_no_permission": "You do not have permission to use this command in this channel.",
       "ticket_not_ticket_channel": "This command can only be used in a ticket channel.",
       "ticket_add_member_success": "{user} has been added to the ticket by {moderator}.",
@@ -252,7 +259,13 @@
       "ticket_priority_set": "Ticket priority set to **{priority}** by {moderator}.",
       "ticket_priority_invalid": "Invalid priority level. Available: Low, Medium, High, Critical.",
       "ticket_info_embed_title": "Ticket Information - {ticket_id}",
-      "ticket_info_embed_description": "Opened by: {creator.username}\nTicket Type: {ticket_type_name}\nStatus: {status}\nPriority: {priority}\nOpened at: {open_time}\nChannel: {channel}",
+      "ticket_info_embed_description": "Opened by: {creator.username}\nTicket Type: {ticket_type_name}\nStatus: {status_name}\nPriority: {priority}\nClaimed by: {claimer.username}\nOpened at: {open_time}\nChannel: {channel}",
+      "ticket_status_set": "Ticket status set to **{status_name}** by {setter.username}.",
+      "ticket_status_invalid": "Invalid status. Available: Open, WaitingForCreator, AwaitingResponse, Escalated.",
+      "ticket_claimed": "Ticket claimed by {claimer.username}.",
+      "ticket_unclaimed": "Ticket unclaimed by {unclaimer.username}.",
+      "ticket_already_claimed": "This ticket is already claimed by {claimer.username}.",
+      "ticket_not_claimed": "This ticket is not currently claimed.",
       "setup_panel_success": "Ticket panel set up successfully in {channel}.",
       "config_update_success": "Ticket configuration for '{setting}' updated to '{value}'."
     }

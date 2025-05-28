@@ -61,6 +61,32 @@ module.exports = {
             )
             .addSubcommand(subcommand =>
                 subcommand
+                    .setName('status')
+                    .setDescription('Sets the status of the current ticket.')
+                    .addStringOption(option =>
+                        option.setName('new_status')
+                            .setDescription('The new status for the ticket.')
+                            .setRequired(true)
+                            .addChoices(
+                                { name: '🟢 Open', value: 'Open' },
+                                { name: '🟡 Waiting For Creator', value: 'WaitingForCreator' },
+                                { name: '🟠 Awaiting Response', value: 'AwaitingResponse' },
+                                { name: '🟣 Escalated', value: 'Escalated' }
+                            )
+                    )
+            )
+            .addSubcommand(subcommand =>
+                subcommand
+                    .setName('claim')
+                    .setDescription('Claims the current ticket, indicating you are handling it.')
+            )
+            .addSubcommand(subcommand =>
+                subcommand
+                    .setName('unclaim')
+                    .setDescription('Unclaims the current ticket, indicating it is no longer being handled by you.')
+            )
+            .addSubcommand(subcommand =>
+                subcommand
                     .setName('info')
                     .setDescription('Shows information about the current ticket.')
             )
@@ -84,6 +110,12 @@ module.exports = {
                                     .setDescription('The category where new ticket channels will be created.')
                                     .addChannelTypes(ChannelType.GuildCategory)
                                     .setRequired(true)
+                            )
+                            .addChannelOption(option =>
+                                option.setName('transcripts_channel')
+                                    .setDescription('Channel where ticket transcripts will be sent.')
+                                    .addChannelTypes(ChannelType.GuildText)
+                                    .setRequired(false)
                             )
                     )
             );
@@ -121,11 +153,13 @@ module.exports = {
             if (subcommand === 'setup_panel') {
                 const panelChannel = interaction.options.getChannel('panel_channel');
                 const ticketCategory = interaction.options.getChannel('ticket_category');
+                const transcriptsChannel = interaction.options.getChannel('transcripts_channel');
                 
                 const result = await ticketsModule.setupTicketPanel(
                     guildId,
                     panelChannel.id,
                     ticketCategory.id,
+                    transcriptsChannel ? transcriptsChannel.id : null,
                     db_pool,
                     config
                 );
@@ -136,6 +170,7 @@ module.exports = {
         }
 
         const allowedInTicket = (isSupport || isTicketCreator || isManagement) && isTicketChannel;
+        const allowedForStaff = (isSupport || isManagement) && isTicketChannel;
 
         if (subcommand === 'close') {
             if (!allowedInTicket) {
@@ -149,7 +184,6 @@ module.exports = {
 
             const reason = interaction.options.getString('reason') || 'No reason provided';
             
-            const ticketData = ticketsModule.activeTickets.get(channelId);
             const creator = await interaction.guild.members.fetch(ticketData.userId);
 
             if (isTicketCreator || isManagement) {
@@ -176,7 +210,7 @@ module.exports = {
                     .replace('{creator_ping}', creator.toString())
                     .replace('{creator.username}', creator.user.username),
                 components: [row],
-                ephemeral: false, // Send publicly in ticket channel
+                ephemeral: false,
                 fetchReply: true
             });
 
@@ -195,12 +229,8 @@ module.exports = {
             logger.debug(`[Tickets] Close confirmation initiated for ticket ${channelId} by ${member.user.tag}.`);
 
         } else if (subcommand === 'add') {
-            if (!isSupport) {
+            if (!allowedForStaff) {
                 await interaction.reply({ content: messages.ticket_no_permission, ephemeral: true });
-                return;
-            }
-            if (!isTicketChannel) {
-                await interaction.reply({ content: messages.ticket_not_ticket_channel, ephemeral: true });
                 return;
             }
             const userToAdd = interaction.options.getUser('user');
@@ -210,12 +240,8 @@ module.exports = {
             await interaction.editReply({ content: result.message });
 
         } else if (subcommand === 'remove') {
-            if (!isSupport) {
+            if (!allowedForStaff) {
                 await interaction.reply({ content: messages.ticket_no_permission, ephemeral: true });
-                return;
-            }
-            if (!isTicketChannel) {
-                await interaction.reply({ content: messages.ticket_not_ticket_channel, ephemeral: true });
                 return;
             }
             const userToRemove = interaction.options.getUser('user');
@@ -225,12 +251,8 @@ module.exports = {
             await interaction.editReply({ content: result.message });
 
         } else if (subcommand === 'priority') {
-            if (!isSupport) { 
+            if (!allowedForStaff) { 
                 await interaction.reply({ content: messages.ticket_no_permission, ephemeral: true });
-                return;
-            }
-            if (!isTicketChannel) {
-                await interaction.reply({ content: messages.ticket_not_ticket_channel, ephemeral: true });
                 return;
             }
             const priorityLevel = interaction.options.getString('level');
@@ -239,13 +261,40 @@ module.exports = {
             const result = await ticketsModule.setTicketPriority(guildId, channelId, priorityLevel, userId, db_pool, config);
             await interaction.editReply({ content: result.message });
 
-        } else if (subcommand === 'info') {
-            if (!allowedInTicket) {
+        } else if (subcommand === 'status') {
+            if (!allowedForStaff) { 
                 await interaction.reply({ content: messages.ticket_no_permission, ephemeral: true });
                 return;
             }
-            if (!isTicketChannel) {
-                await interaction.reply({ content: messages.ticket_not_ticket_channel, ephemeral: true });
+            const newStatus = interaction.options.getString('new_status');
+            await interaction.deferReply({ ephemeral: false });
+
+            const result = await ticketsModule.setTicketStatus(guildId, channelId, newStatus, userId, db_pool, config);
+            await interaction.editReply({ content: result.message });
+
+        } else if (subcommand === 'claim') {
+            if (!allowedForStaff) {
+                await interaction.reply({ content: messages.ticket_no_permission, ephemeral: true });
+                return;
+            }
+            await interaction.deferReply({ ephemeral: false });
+
+            const result = await ticketsModule.claimTicket(guildId, channelId, userId, db_pool, config);
+            await interaction.editReply({ content: result.message });
+
+        } else if (subcommand === 'unclaim') {
+            if (!allowedForStaff) {
+                await interaction.reply({ content: messages.ticket_no_permission, ephemeral: true });
+                return;
+            }
+            await interaction.deferReply({ ephemeral: false });
+
+            const result = await ticketsModule.unclaimTicket(guildId, channelId, userId, db_pool, config);
+            await interaction.editReply({ content: result.message });
+
+        } else if (subcommand === 'info') {
+            if (!allowedInTicket) {
+                await interaction.reply({ content: messages.ticket_no_permission, ephemeral: true });
                 return;
             }
             await interaction.deferReply({ ephemeral: true });

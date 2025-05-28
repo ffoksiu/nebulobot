@@ -2,10 +2,100 @@ const logger = require('../logger');
 const { ChannelType, PermissionsBitField, ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
 const activeTickets = new Map();
-const pendingCloseConfirmations = new Map();
+const pendingCloseConfirmations = new Map(); 
+
+function generateHtmlTranscript(ticketData, messages, guild, creator, closer, claimedBy, transcriptMessages) {
+    const ticketType = guild.client.config.tickets.ticket_types.find(type => type.id === ticketData.ticket_type_id);
+    const statusInfo = guild.client.config.tickets.ticket_statuses[ticketData.status];
+    const header = messages.ticket_transcript_header
+        .replace('{ticket_id}', ticketData.ticket_id)
+        .replace('{ticket_type_name}', ticketType ? ticketType.name : 'Unknown')
+        .replace('{creator.username}', creator.user.username)
+        .replace('{closer.username}', closer ? closer.user.username : 'N/A')
+        .replace('{open_time}', new Date(ticketData.opened_at).toLocaleString())
+        .replace('{close_time}', new Date().toLocaleString())
+        .replace('{priority}', ticketData.priority)
+        .replace('{status_name}', statusInfo ? statusInfo.emoji + ' ' + ticketData.status : ticketData.status)
+        .replace('{claimer.username}', claimedBy ? claimedBy.user.username : 'Unclaimed');
+
+    let htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Ticket Transcript - ${ticketData.ticket_id}</title>
+        <meta charset="utf-8">
+        <style>
+            body { font-family: Arial, sans-serif; background-color: #36393F; color: #DCDEE0; }
+            .container { max-width: 800px; margin: 20px auto; background-color: #313338; border-radius: 8px; padding: 20px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); }
+            .header { border-bottom: 1px solid #4F545C; padding-bottom: 10px; margin-bottom: 20px; }
+            .message { margin-bottom: 15px; display: flex; }
+            .message-avatar { width: 40px; height: 40px; border-radius: 50%; margin-right: 10px; }
+            .message-content { flex-grow: 1; }
+            .message-author { font-weight: bold; color: #5865F2; }
+            .message-timestamp { font-size: 0.8em; color: #A3A6AA; margin-left: 10px; }
+            .message-text { margin-top: 5px; word-wrap: break-word; }
+            pre { background-color: #2F3136; padding: 10px; border-radius: 5px; overflow-x: auto; }
+            a { color: #00B0F4; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+            .embed { border-left: 4px solid #4F545C; background-color: #2F3136; padding: 10px; margin-top: 5px; border-radius: 4px; }
+            .embed-title { font-weight: bold; margin-bottom: 5px; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>${header}</h1>
+            </div>
+            <div class="transcript-body">
+    `;
+
+    for (const msg of transcriptMessages) {
+        const author = msg.author.username;
+        const avatar = msg.author.displayAvatarURL({ format: 'png', size: 64 });
+        const timestamp = msg.createdAt.toLocaleString();
+        const content = msg.content.replace(/</g, '<').replace(/>/g, '>').replace(/\n/g, '<br>');
+
+        htmlContent += `
+        <div class="message">
+            <img class="message-avatar" src="${avatar}" alt="${author}">
+            <div class="message-content">
+                <span class="message-author">${author}</span>
+                <span class="message-timestamp">${timestamp}</span>
+                <div class="message-text">${content}</div>
+        `;
+        
+        if (msg.attachments.size > 0) {
+            msg.attachments.forEach(attachment => {
+                htmlContent += `<div class="message-text">Attachment: <a href="${attachment.url}" target="_blank">${attachment.name}</a></div>`;
+            });
+        }
+        if (msg.embeds.length > 0) {
+            msg.embeds.forEach(embed => {
+                htmlContent += `<div class="embed">`;
+                if (embed.title) htmlContent += `<div class="embed-title">${embed.title}</div>`;
+                if (embed.description) htmlContent += `<div class="message-text">${embed.description}</div>`;
+                htmlContent += `</div>`;
+            });
+        }
+        htmlContent += `
+            </div>
+        </div>
+        `;
+    }
+
+    htmlContent += `
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+    return htmlContent;
+}
+
 
 module.exports = {
     activeTickets,
+    pendingCloseConfirmations, 
 
     init: async (client, config, db_pool) => {
         logger.tickets('Tickets module initialization requested.');
@@ -18,6 +108,8 @@ module.exports = {
             return;
         }
         logger.tickets('Initializing Tickets module...');
+
+        client.config = config; 
 
         const ticketsConfig = config.tickets;
 
@@ -49,16 +141,17 @@ module.exports = {
                         channel_id VARCHAR(20) NOT NULL UNIQUE,
                         creator_id VARCHAR(20) NOT NULL,
                         opened_at DATETIME NOT NULL,
-                        status VARCHAR(20) NOT NULL DEFAULT 'open',
+                        status VARCHAR(20) NOT NULL DEFAULT 'Open',
                         closed_at DATETIME,
                         priority VARCHAR(20) DEFAULT 'Medium',
                         ticket_type_id VARCHAR(10),
-                        modal_data JSON
+                        modal_data JSON,
+                        claimed_by_id VARCHAR(20)
                     );
                 `);
                 logger.debug(`[Tickets] Ensured table '${tickets_active_table_name}' exists for guild ${guild.name} (${guild.id}).`);
 
-                const [activeRows] = await connection.query(`SELECT channel_id, creator_id, ticket_id, opened_at, priority, ticket_type_id, modal_data FROM \`${tickets_active_table_name}\` WHERE status = 'open'`);
+                const [activeRows] = await connection.query(`SELECT channel_id, creator_id, ticket_id, opened_at, priority, ticket_type_id, modal_data, status, claimed_by_id FROM \`${tickets_active_table_name}\` WHERE status != 'Closed'`);
                 for (const row of activeRows) {
                     activeTickets.set(row.channel_id, {
                         guildId: guild.id,
@@ -67,9 +160,11 @@ module.exports = {
                         openedAt: new Date(row.opened_at),
                         priority: row.priority,
                         typeId: row.ticket_type_id,
-                        modalData: row.modal_data
+                        modalData: row.modal_data,
+                        status: row.status,
+                        claimedBy: row.claimed_by_id
                     });
-                    logger.debug(`[Tickets] Loaded active ticket ${row.ticket_id} for channel ${row.channel_id}.`);
+                    logger.debug(`[Tickets] Loaded active ticket ${row.ticket_id} for channel ${row.channel_id} (Status: ${row.status}).`);
                 }
 
             } catch (err) {
@@ -103,7 +198,7 @@ module.exports = {
                     const tickets_active_table_name = `tickets_active_${guild.id}`;
 
                     const [existingTicketRows] = await connection.query(
-                        `SELECT channel_id FROM \`${tickets_active_table_name}\` WHERE creator_id = ? AND status = 'open'`,
+                        `SELECT channel_id FROM \`${tickets_active_table_name}\` WHERE creator_id = ? AND status != 'Closed'`,
                         [user.id]
                     );
                     if (existingTicketRows.length > 0) {
@@ -112,7 +207,7 @@ module.exports = {
                             await interaction.reply({ content: messages.ticket_already_open.replace('{channel}', existingChannel.toString()), ephemeral: true });
                             return;
                         } else {
-                            await connection.query(`UPDATE \`${tickets_active_table_name}\` SET status = 'closed' WHERE channel_id = ?`, [existingTicketRows[0].channel_id]);
+                            await connection.query(`UPDATE \`${tickets_active_table_name}\` SET status = 'Closed' WHERE channel_id = ?`, [existingTicketRows[0].channel_id]);
                         }
                     }
 
@@ -218,16 +313,18 @@ module.exports = {
                     modalDataEmbedFields += `**${field.label}:**\n${value}\n`;
                 }
 
-                const channelNameTemplate = ticketsConfig.channel_naming_template || '{emoji}-{type_id}-{username}-{user_id}';
+                const initialStatus = 'Open';
+                const statusEmoji = ticketsConfig.ticket_statuses[initialStatus]?.emoji || '';
+                const channelNameTemplate = ticketsConfig.channel_naming_template || '{status_emoji}-{type_id}-{username}-{user_id}';
                 const channelName = channelNameTemplate
-                    .replace('{emoji}', ticketType.emoji)
+                    .replace('{status_emoji}', statusEmoji)
                     .replace('{type_id}', ticketType.id)
                     .replace('{username}', user.username)
                     .replace('{user_id}', user.id)
                     .toLowerCase()
-                    .replace(/[^a-z0-9-]/g, '-') // these are bunch 
-                    .replace(/-{2,}/g, '-')      // of limitations and stuff that
-                    .substring(0, 100); // basically makes channel names more usable i believe
+                    .replace(/[^a-z0-9-]/g, '-')
+                    .replace(/-{2,}/g, '-')
+                    .substring(0, 100);
 
                 const ticketChannel = await guild.channels.create({
                     name: channelName,
@@ -250,8 +347,8 @@ module.exports = {
                 });
 
                 const [insertResult] = await connection.query(
-                    `INSERT INTO \`${tickets_active_table_name}\` (channel_id, creator_id, opened_at, priority, ticket_type_id, modal_data) VALUES (?, ?, ?, ?, ?, ?)`,
-                    [ticketChannel.id, user.id, new Date(), ticketType.default_priority, ticketType.id, JSON.stringify(modalData)]
+                    `INSERT INTO \`${tickets_active_table_name}\` (channel_id, creator_id, opened_at, priority, ticket_type_id, modal_data, status) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [ticketChannel.id, user.id, new Date(), ticketType.default_priority, ticketType.id, JSON.stringify(modalData), initialStatus]
                 );
                 const ticketId = insertResult.insertId;
 
@@ -262,17 +359,21 @@ module.exports = {
                     openedAt: new Date(),
                     priority: ticketType.default_priority,
                     typeId: ticketType.id,
-                    modalData: modalData
+                    modalData: modalData,
+                    status: initialStatus,
+                    claimedBy: null
                 });
 
                 const pingRoles = (ticketsConfig.support_role_ids || []).map(roleId => `<@&${roleId}>`).join(' ') + ' ';
                 const creatorPing = user.toString();
+                const statusName = initialStatus;
 
                 const initialMessageContent = messages.ticket_channel_initial_message_content
                     .replace('{ping_roles}', pingRoles.trim())
                     .replace('{creator_ping}', creatorPing)
                     .replace('{ticket_type_name}', ticketType.name)
                     .replace('{priority}', ticketType.default_priority)
+                    .replace('{status_name}', statusName)
                     .replace('{modal_data_embed_fields}', modalDataEmbedFields);
 
                 await ticketChannel.send({
@@ -281,7 +382,7 @@ module.exports = {
                         new EmbedBuilder()
                             .setTitle(`Ticket ${ticketId} - ${ticketType.name}`)
                             .setDescription(`Hello ${user}, a staff member will be with you shortly.`)
-                            .setColor('Blurple')
+                            .setColor(ticketsConfig.ticket_statuses[initialStatus]?.color || 'Blurple')
                             .setFooter({ text: `Ticket ID: ${ticketId} | Type: ${ticketType.name}` })
                     ]
                 });
@@ -309,7 +410,7 @@ module.exports = {
             try {
                 connection = await db_pool.getConnection();
                 const tickets_active_table_name = `tickets_active_${guild.id}`;
-                await connection.query(`UPDATE \`${tickets_active_table_name}\` SET status = 'closed', closed_at = ? WHERE channel_id = ?`, [new Date(), channel.id]);
+                await connection.query(`UPDATE \`${tickets_active_table_name}\` SET status = 'Closed', closed_at = ? WHERE channel_id = ?`, [new Date(), channel.id]);
                 activeTickets.delete(channel.id);
                 logger.tickets(`Ticket ${ticketData.ticketId} for channel ${channel.name} marked as closed due to channel deletion.`);
             } catch (error) {
@@ -329,7 +430,7 @@ module.exports = {
         let connection;
         try {
             connection = await db_pool.getConnection();
-            const [ticketRows] = await connection.query(`SELECT * FROM \`${tickets_active_table_name}\` WHERE channel_id = ? AND status = 'open'`, [channelId]);
+            const [ticketRows] = await connection.query(`SELECT * FROM \`${tickets_active_table_name}\` WHERE channel_id = ? AND status != 'Closed'`, [channelId]);
 
             if (ticketRows.length === 0) return { success: false, message: messages.ticket_not_ticket_channel };
 
@@ -338,6 +439,7 @@ module.exports = {
             const ticketChannel = guild.channels.cache.get(channelId);
             const closer = await guild.members.fetch(closerId);
             const creator = await guild.members.fetch(ticketData.creator_id);
+            const claimedBy = ticketData.claimed_by_id ? await guild.members.fetch(ticketData.claimed_by_id) : null;
             const ticketType = config.tickets.ticket_types.find(type => type.id === ticketData.ticket_type_id);
 
             const [configRows] = await connection.query(`SELECT transcripts_channel_id FROM \`${tickets_config_table_name}\` WHERE guild_id = ?`, [guildId]);
@@ -346,49 +448,27 @@ module.exports = {
 
             let transcriptContent = '';
             if (ticketChannel) {
-                const fetchedMessages = await ticketChannel.messages.fetch({ limit: 100 });
+                const fetchedMessages = await ticketChannel.messages.fetch({ limit: 200 }); // Fetch more messages for transcript
                 const sortedMessages = [...fetchedMessages.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
                 
-                transcriptContent = messages.ticket_transcript_header
-                    .replace('{ticket_id}', ticketData.ticket_id)
-                    .replace('{ticket_type_name}', ticketType ? ticketType.name : 'Unknown')
-                    .replace('{creator.username}', creator.user.username)
-                    .replace('{closer.username}', closer.user.username)
-                    .replace('{open_time}', new Date(ticketData.opened_at).toLocaleString())
-                    .replace('{close_time}', new Date().toLocaleString())
-                    .replace('{priority}', ticketData.priority);
-
-                for (const msg of sortedMessages) {
-                    transcriptContent += `[${msg.author.username} - ${msg.createdAt.toLocaleString()}]: ${msg.cleanContent}\n`;
-                }
+                transcriptContent = generateHtmlTranscript(ticketData, messages, guild, creator, closer, claimedBy, sortedMessages);
             }
 
             if (transcriptsChannel) {
-                if (transcriptContent.length > 1900) {
-                    const attachment = Buffer.from(transcriptContent, 'utf8');
-                    await transcriptsChannel.send({
-                        files: [{ attachment: attachment, name: `ticket-${ticketData.ticket_id}-transcript.txt` }],
-                        embeds: [
-                            new EmbedBuilder()
-                                .setTitle(`Ticket #${ticketData.ticket_id} Closed (${ticketType ? ticketType.name : 'Unknown Type'})`)
-                                .setDescription(`Created by ${creator.toString()} | Closed by ${closer.toString()}`)
-                                .setColor('Green')
-                        ]
-                    });
-                } else {
-                    await transcriptsChannel.send({
-                        content: `\`\`\`\n${transcriptContent}\`\`\``,
-                        embeds: [
-                            new EmbedBuilder()
-                                .setTitle(`Ticket #${ticketData.ticket_id} Closed (${ticketType ? ticketType.name : 'Unknown Type'})`)
-                                .setDescription(`Created by ${creator.toString()} | Closed by ${closer.toString()}`)
-                                .setColor('Green')
-                        ]
-                    });
-                }
+                const attachment = Buffer.from(transcriptContent, 'utf8');
+                await transcriptsChannel.send({
+                    files: [{ attachment: attachment, name: `ticket-${ticketData.ticket_id}-transcript.html` }],
+                    embeds: [
+                        new EmbedBuilder()
+                            .setTitle(`Ticket #${ticketData.ticket_id} Closed (${ticketType ? ticketType.name : 'Unknown Type'})`)
+                            .setDescription(`Created by ${creator.toString()} | Closed by ${closer.toString()}${claimedBy ? ` | Claimed by ${claimedBy.toString()}` : ''}`)
+                            .setColor('Green')
+                            .setFooter({ text: `Ticket ID: ${ticketData.ticket_id}` })
+                    ]
+                });
             }
 
-            await connection.query(`UPDATE \`${tickets_active_table_name}\` SET status = 'closed', closed_at = ? WHERE channel_id = ?`, [new Date(), channelId]);
+            await connection.query(`UPDATE \`${tickets_active_table_name}\` SET status = 'Closed', closed_at = ?, claimed_by_id = NULL WHERE channel_id = ?`, [new Date(), channelId]);
             activeTickets.delete(channelId);
 
             if (ticketChannel) await ticketChannel.delete();
@@ -484,7 +564,7 @@ module.exports = {
         try {
             connection = await db_pool.getConnection();
             const [updateResult] = await connection.query(
-                `UPDATE \`${tickets_active_table_name}\` SET priority = ? WHERE channel_id = ? AND status = 'open'`,
+                `UPDATE \`${tickets_active_table_name}\` SET priority = ? WHERE channel_id = ? AND status != 'Closed'`,
                 [priority, channelId]
             );
 
@@ -492,12 +572,155 @@ module.exports = {
 
             const guild = await client.guilds.fetch(guildId);
             const moderator = await guild.members.fetch(moderatorId);
+            const ticketChannel = guild.channels.cache.get(channelId);
             logger.tickets(`Ticket ${channelId} priority set to ${priority} by ${moderator.user.tag}.`);
+            
+            const ticketData = activeTickets.get(channelId);
+            if (ticketData) {
+                ticketData.priority = priority;
+                activeTickets.set(channelId, ticketData);
+            }
+
             return { success: true, message: messages.ticket_priority_set.replace('{priority}', priority).replace('{moderator}', moderator.user.username) };
 
         } catch (error) {
             logger.error(`[Tickets] Error setting ticket priority for ${channelId}: ${error.message}`);
             return { success: false, message: `An error occurred while setting priority: ${error.message}` };
+        } finally {
+            if (connection) connection.release();
+        }
+    },
+
+    setTicketStatus: async (guildId, channelId, newStatus, setterId, db_pool, config) => {
+        const messages = config.tickets.messages;
+        const validStatuses = Object.keys(config.tickets.ticket_statuses).filter(s => s !== 'Closed'); // Don't allow setting to Closed via this command
+        if (!validStatuses.includes(newStatus)) {
+            return { success: false, message: messages.ticket_status_invalid };
+        }
+
+        const tickets_active_table_name = `tickets_active_${guildId}`;
+        let connection;
+        try {
+            connection = await db_pool.getConnection();
+            const [updateResult] = await connection.query(
+                `UPDATE \`${tickets_active_table_name}\` SET status = ? WHERE channel_id = ? AND status != 'Closed'`,
+                [newStatus, channelId]
+            );
+
+            if (updateResult.affectedRows === 0) return { success: false, message: messages.ticket_not_ticket_channel };
+
+            const guild = await client.guilds.fetch(guildId);
+            const setter = await guild.members.fetch(setterId);
+            const ticketChannel = guild.channels.cache.get(channelId);
+
+            const ticketData = activeTickets.get(channelId);
+            if (ticketData) {
+                ticketData.status = newStatus;
+                activeTickets.set(channelId, ticketData);
+            }
+            
+            const statusEmoji = config.tickets.ticket_statuses[newStatus]?.emoji || '';
+            const channelNameTemplate = config.tickets.channel_naming_template || '{status_emoji}-{type_id}-{username}-{user_id}';
+            const oldName = ticketChannel.name;
+            const newName = channelNameTemplate
+                .replace('{status_emoji}', statusEmoji)
+                .replace('{type_id}', ticketData.typeId)
+                .replace('{username}', ticketChannel.name.split('-').pop()) // simplified way to get username part
+                .replace('{user_id}', ticketData.userId)
+                .toLowerCase()
+                .replace(/[^a-z0-9-]/g, '-')
+                .replace(/-{2,}/g, '-')
+                .substring(0, 100);
+            
+            if (newName !== oldName) {
+                await ticketChannel.setName(newName);
+            }
+
+            logger.tickets(`Ticket ${channelId} status set to ${newStatus} by ${setter.user.tag}.`);
+            return { success: true, message: messages.ticket_status_set.replace('{status_name}', newStatus).replace('{setter.username}', setter.user.username) };
+
+        } catch (error) {
+            logger.error(`[Tickets] Error setting ticket status for ${channelId}: ${error.message}`);
+            return { success: false, message: `An error occurred while setting status: ${error.message}` };
+        } finally {
+            if (connection) connection.release();
+        }
+    },
+
+    claimTicket: async (guildId, channelId, claimerId, db_pool, config) => {
+        const messages = config.tickets.messages;
+        const tickets_active_table_name = `tickets_active_${guildId}`;
+        let connection;
+        try {
+            connection = await db_pool.getConnection();
+            const [ticketRows] = await connection.query(`SELECT claimed_by_id FROM \`${tickets_active_table_name}\` WHERE channel_id = ? AND status != 'Closed'`, [channelId]);
+
+            if (ticketRows.length === 0) return { success: false, message: messages.ticket_not_ticket_channel };
+            if (ticketRows[0].claimed_by_id) {
+                const existingClaimer = await guild.members.fetch(ticketRows[0].claimed_by_id);
+                return { success: false, message: messages.ticket_already_claimed.replace('{claimer.username}', existingClaimer.user.username) };
+            }
+
+            await connection.query(
+                `UPDATE \`${tickets_active_table_name}\` SET claimed_by_id = ? WHERE channel_id = ?`,
+                [claimerId, channelId]
+            );
+
+            const guild = await client.guilds.fetch(guildId);
+            const claimer = await guild.members.fetch(claimerId);
+            const ticketChannel = guild.channels.cache.get(channelId);
+            
+            const ticketData = activeTickets.get(channelId);
+            if (ticketData) {
+                ticketData.claimedBy = claimerId;
+                activeTickets.set(channelId, ticketData);
+            }
+
+            logger.tickets(`Ticket ${channelId} claimed by ${claimer.user.tag}.`);
+            return { success: true, message: messages.ticket_claimed.replace('{claimer.username}', claimer.user.username) };
+
+        } catch (error) {
+            logger.error(`[Tickets] Error claiming ticket ${channelId}: ${error.message}`);
+            return { success: false, message: `An error occurred while claiming the ticket: ${error.message}` };
+        } finally {
+            if (connection) connection.release();
+        }
+    },
+
+    unclaimTicket: async (guildId, channelId, unclaimerId, db_pool, config) => {
+        const messages = config.tickets.messages;
+        const tickets_active_table_name = `tickets_active_${guildId}`;
+        let connection;
+        try {
+            connection = await db_pool.getConnection();
+            const [ticketRows] = await connection.query(`SELECT claimed_by_id FROM \`${tickets_active_table_name}\` WHERE channel_id = ? AND status != 'Closed'`, [channelId]);
+
+            if (ticketRows.length === 0) return { success: false, message: messages.ticket_not_ticket_channel };
+            if (!ticketRows[0].claimed_by_id) {
+                return { success: false, message: messages.ticket_not_claimed };
+            }
+
+            await connection.query(
+                `UPDATE \`${tickets_active_table_name}\` SET claimed_by_id = NULL WHERE channel_id = ?`,
+                [channelId]
+            );
+
+            const guild = await client.guilds.fetch(guildId);
+            const unclaimer = await guild.members.fetch(unclaimerId);
+            const ticketChannel = guild.channels.cache.get(channelId);
+
+            const ticketData = activeTickets.get(channelId);
+            if (ticketData) {
+                ticketData.claimedBy = null;
+                activeTickets.set(channelId, ticketData);
+            }
+
+            logger.tickets(`Ticket ${channelId} unclaimed by ${unclaimer.user.tag}.`);
+            return { success: true, message: messages.ticket_unclaimed.replace('{unclaimer.username}', unclaimer.user.username) };
+
+        } catch (error) {
+            logger.error(`[Tickets] Error unclaiming ticket ${channelId}: ${error.message}`);
+            return { success: false, message: `An error occurred while unclaiming the ticket: ${error.message}` };
         } finally {
             if (connection) connection.release();
         }
@@ -518,6 +741,10 @@ module.exports = {
             const creator = await guild.members.fetch(ticketData.creator_id);
             const ticketChannel = guild.channels.cache.get(channelId);
             const ticketType = config.tickets.ticket_types.find(type => type.id === ticketData.ticket_type_id);
+            const claimedBy = ticketData.claimed_by_id ? await guild.members.fetch(ticketData.claimed_by_id) : null;
+            const statusInfo = config.tickets.ticket_statuses[ticketData.status];
+            const statusName = statusInfo ? `${statusInfo.emoji} ${ticketData.status}` : ticketData.status;
+
 
             const modalDataFields = ticketData.modal_data ?
                 Object.entries(ticketData.modal_data)
@@ -533,13 +760,14 @@ module.exports = {
                 .setDescription(messages.ticket_info_embed_description
                     .replace('{creator.username}', creator.user.username)
                     .replace('{ticket_type_name}', ticketType ? ticketType.name : 'Unknown')
-                    .replace('{status}', ticketData.status)
+                    .replace('{status_name}', statusName)
                     .replace('{priority}', ticketData.priority)
+                    .replace('{claimer.username}', claimedBy ? claimedBy.user.username : 'N/A')
                     .replace('{open_time}', new Date(ticketData.opened_at).toLocaleString())
                     .replace('{channel}', ticketChannel.toString())
                 )
                 .addFields({ name: 'Submission Details', value: modalDataFields })
-                .setColor('Blue')
+                .setColor(statusInfo?.color || 'Blue')
                 .setFooter({ text: `Ticket ID: ${ticketData.ticket_id} | Type: ${ticketType ? ticketType.name : 'Unknown'}` });
 
             return { success: true, embed: embed };
@@ -552,7 +780,7 @@ module.exports = {
         }
     },
 
-    setupTicketPanel: async (guildId, panelChannelId, categoryId, db_pool, config) => {
+    setupTicketPanel: async (guildId, panelChannelId, categoryId, transcriptsChannelId, db_pool, config) => {
         const messages = config.tickets.messages;
         const tickets_config_table_name = `tickets_config_${guildId}`;
         let connection;
@@ -567,8 +795,8 @@ module.exports = {
             if (!categoryChannel || categoryChannel.type !== ChannelType.GuildCategory) {
                 return { success: false, message: "Invalid category channel provided. Must be a category." };
             }
-            if (config.tickets.transcripts_channel_id) {
-                 const transChannel = guild.channels.cache.get(config.tickets.transcripts_channel_id);
+            if (transcriptsChannelId) {
+                 const transChannel = guild.channels.cache.get(transcriptsChannelId);
                  if (!transChannel || transChannel.type !== ChannelType.GuildText) {
                     return { success: false, message: "Invalid transcripts channel provided. Must be a text channel." };
                  }
@@ -584,7 +812,7 @@ module.exports = {
                     categoryId,
                     JSON.stringify(config.tickets.support_role_ids || []),
                     JSON.stringify(config.tickets.management_role_ids || []),
-                    config.tickets.transcripts_channel_id,
+                    transcriptsChannelId,
                     config.tickets.channel_naming_template
                 ]
             );
