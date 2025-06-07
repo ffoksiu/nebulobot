@@ -1,0 +1,303 @@
+{
+  "main": {
+    "bot_name": "Absolutely Epic Bot",
+    "status_change_interval_seconds": 10,
+    "bot_statuses": [
+      {
+        "activity_type": "Playing",
+        "activity_name": "with myself"
+      },
+      {
+        "activity_type": "Watching",
+        "activity_name": "You."
+      },
+      {
+        "activity_type": "Listening",
+        "activity_name": "to Myslovitz"
+      },
+      {
+        "activity_type": "Competing",
+        "activity_name": "in Brawl Stars"
+      },
+      {
+        "activity_type": "Streaming",
+        "activity_name": "on Twitch",
+        "stream_url": "https://twitch.tv/balls"
+      },
+      {
+        "activity_type": "Custom",
+        "activity_name": "i love natalka"
+      }
+    ],
+    "command_prefix": "!"
+  },
+  "database": {
+    "enabled": true,
+    "host": "193.111.250.84",
+    "port": 3306,
+    "user": "bot",
+    "password": "Abcd1234!",
+    "database_name": "bot"
+  },
+  "text_levels": {
+    "enabled": true,
+    "xp_gain_per_message": 1,
+    "xp_cooldown_seconds": 5,
+    "level_up_formula": "5 * {level} * {level} + 50 * {level} + 100",
+    "level_up_channel_id": null,
+    "command_settings": {
+      "level_subcommand_name": "level",
+      "leaderboard_subcommand_name": "leaderboard",
+      "admin_group_name": "admin",
+      "admin_channel_subcommand_name": "channel",
+      "admin_toggle_ping_subcommand_name": "ping",
+      "admin_reset_xp_subcommand_name": "resetxp",
+      "messages": {
+        "user_level_info": "{user.name} is Level {level} with {xp} XP. Next level at {next_level_xp} XP.",
+        "leaderboard_title": "Text Level Leaderboard",
+        "leaderboard_entry": "#{rank}. {user.name}: Level {level} ({xp} XP)",
+        "no_data_found": "No text level data found.",
+        "user_not_found": "Could not find that user.",
+        "channel_xp_enabled": "Text XP gain is now **enabled** for {channel.name}.",
+        "channel_xp_disabled": "Text XP gain is now **disabled** for {channel.name}.",
+        "ping_toggled_on": "Level up pings are now **ON** for {user.name}.",
+        "ping_toggled_off": "Level up pings are now **OFF** for {user.name}.",
+        "xp_reset_success": "XP for {user.name} has been reset to 0.",
+        "not_admin_permission": "You do not have permission to use this command."
+      }
+    },
+    "level_up_messages": {
+      "embed_title": "🎉 Level Up!",
+      "embed_color": "#00FF00",
+      "embed_content": "Congratulations, {user.name}! You've reached **Level {level}**!",
+      "embed_footer": "User ID: {user.id} | Time: {time}"
+    }
+  },
+  "voice_levels": {
+    "enabled": true,
+    "xp_gain_per_second": 1,             
+    "xp_grant_interval_seconds": 30,         
+    "level_up_formula": "5 * {level} * {level} + 50 * {level} + 100",
+    "level_up_channel_id": null,
+    "command_settings": {
+      "level_subcommand_name": "level",
+      "leaderboard_subcommand_name": "leaderboard",
+      "channel_xp_subcommand_name": "channel_xp",
+      "colleague_xp_subcommand_name": "colleague_xp",
+      "colleague_xp_pair_subcommand_name": "pair",
+      "admin_group_name": "admin",
+      "admin_channel_subcommand_name": "channel",
+      "admin_toggle_ping_subcommand_name": "toggle_ping",
+      "admin_reset_xp_subcommand_name": "reset_xp",
+      "messages": {
+        "user_level_info": "{user.name} is Voice Level {level} with {xp} XP. Next level at {next_level_xp} XP.",
+        "leaderboard_title": "Voice Level Leaderboard",
+        "leaderboard_entry": "#{rank}. {user.name}: Level {level} ({xp} XP)",
+        "channel_xp_info": "{user.name} has {xp} Voice XP in {channel.name}.",
+        "colleague_xp_top_title": "{user.name}'s Top Voice Colleagues",
+        "colleague_xp_top_entry": "#{rank}. {colleague.name}: {xp} XP",
+        "colleague_xp_pair_info": "{user1.name} and {user2.name} have {xp} shared voice XP.",
+        "no_data_found": "No voice level data found.",
+        "user_not_found": "Could not find that user.",
+        "channel_xp_enabled": "Voice XP gain is now **enabled** for {channel.name}.",
+        "channel_xp_disabled": "Voice XP gain is now **disabled** for {channel.name}.",
+        "ping_toggled_on": "Level up pings are now **ON** for {user.name}.",
+        "ping_toggled_off": "Level up pings are now **OFF** for {user.name}.",
+        "xp_reset_success": "XP for {user.name} has been reset to 0.",
+        "not_admin_permission": "You do not have permission to use this command."
+      }
+    },
+    "level_up_messages": {
+      "embed_title": "🎉 Voice Level Up!",
+      "embed_color": "#FFC0CB",
+      "embed_content": "Congratulations, {user.name}! You've reached a new voice level: **{level}**!",
+      "embed_footer": "User ID: {user.id} | Time: {time}"
+    }
+  },
+  "economy": {
+    "enabled": false
+  },
+  "moderation": {
+    "enabled": false
+  },
+  "logs": {
+    "enabled": false
+  },
+  "giveaways": {
+    "enabled": false
+  },
+  "admin": {
+    "enabled": true,
+    "config_editor_roles": [],
+    "config_editor_users": [],
+    "messages": {
+      "no_permission": "You do not have permission to use this command.",
+      "config_view_success": "Config value for `{path}`: ```json\n{value}\n```",
+      "config_view_not_found": "Path `{path}` not found in config.",
+      "config_edit_success": "Config value for `{path}` updated to `{value}`. Restart bot for full effect if not automatically reloaded.",
+      "config_edit_fail_parse": "Failed to parse value for `{path}`. Ensure it's valid JSON for objects/arrays, or true/false for booleans, or a number.",
+      "config_edit_fail_write": "Failed to write config to file: {error}",
+      "config_reload_success": "Configuration reloaded from file. Changes might take effect immediately.",
+      "config_reload_fail": "Failed to reload config from file: {error}"
+    }
+  },
+  "tickets": {
+    "enabled": true,
+    "panel_channel_id": 1325902534711447730,
+    "ticket_category_id": 1379903330557624370,
+    "support_role_ids": [],
+    "management_role_ids": [],
+    "transcripts_channel_id": 1325902534090424356,
+    "channel_naming_template": "{status_emoji}-{type_id}-{username}-{user_id}",
+    "close_confirmation_timeout_seconds": 60,
+    "ticket_statuses": {
+      "Open": { "emoji": "🟢", "color": "Green" },
+      "WaitingForCreator": { "emoji": "🟡", "color": "Yellow" },
+      "AwaitingResponse": { "emoji": "🟠", "color": "Orange" },
+      "Escalated": { "emoji": "🟣", "color": "Purple" },
+      "Closed": { "emoji": "⚫", "color": "Black" }
+    },
+    "ticket_types": [
+      {
+        "id": "NIG",
+        "name": "balls black niga",
+        "emoji": "❔",
+        "button_style": "Primary",
+        "is_restricted": false,
+        "default_priority": "Medium",
+        "modal_fields": [
+          {
+            "custom_id": "issue_summary",
+            "label": "Briefly describe your issue:",
+            "style": "Short",
+            "required": true,
+            "min_length": 10,
+            "max_length": 100
+          },
+          {
+            "custom_id": "detailed_description",
+            "label": "Provide a detailed description:",
+            "style": "Paragraph",
+            "required": true,
+            "min_length": 20,
+            "max_length": 1000
+          }
+        ]
+      },
+      {
+        "id": "REP",
+        "name": "Reputacja ma ulegla zniszczeniu",
+        "emoji": "🚨",
+        "button_style": "Danger",
+        "is_restricted": false,
+        "default_priority": "High",
+        "modal_fields": [
+          {
+            "custom_id": "reported_user",
+            "label": "Who are you reporting? (User ID or Name)",
+            "style": "Short",
+            "required": true,
+            "min_length": 3,
+            "max_length": 50
+          },
+          {
+            "custom_id": "report_reason",
+            "label": "What rule did they break? (Be specific)",
+            "style": "Paragraph",
+            "required": true,
+            "min_length": 20,
+            "max_length": 1000
+          },
+          {
+            "custom_id": "69",
+            "label": "are u sure",
+            "style": "Short",
+            "required": false,
+            "max_length": 200
+          }
+        ]
+      },
+      {
+        "id": "SEX",
+        "name": "Piwnica chodz sie seksowac pls",
+        "emoji": "👑",
+        "button_style": "Secondary",
+        "is_restricted": true,
+        "default_priority": "Critical",
+        "modal_fields": [
+          {
+            "custom_id": "management_issue",
+            "label": "What is your management-related issue?",
+            "style": "Paragraph",
+            "required": true,
+            "min_length": 50,
+            "max_length": 1500
+          }
+        ]
+      }
+    ],
+    "messages": {
+      "ticket_panel_embed_title": "Need Help? Open a Ticket!",
+      "ticket_panel_embed_description": "Click the button below that best suits your needs. A private channel will be created where you can talk with our staff.",
+      "ticket_opened_success": "Your ticket {channel} has been created! Please describe your issue there.",
+      "ticket_already_open": "You already have an open ticket: {channel}.",
+      "ticket_channel_initial_message_content": "{ping_roles} {creator_ping} Your ticket has been created. A staff member will be with you shortly.\n\nTicket Type: **{ticket_type_name}**\nPriority: **{priority}**\nStatus: **{status_name}**\n\n**Details from your submission:**\n{modal_data_embed_fields}\n\nTo close this ticket, use the `/ticket close` command.",
+      "ticket_closed_confirmation_prompt": "{closer_ping} Are you sure you want to close this ticket? {creator_ping} (Ticket creator: {creator.username}) Click the button to confirm.",
+      "ticket_closed_confirmation_button_label": "Confirm Close",
+      "ticket_closed_success": "Ticket {channel} has been closed by {closer.username}. Transcript saved to {transcript_channel}.",
+      "ticket_closed_no_transcript": "Ticket {channel} has been closed by {closer.username}.",
+      "ticket_closed_by_creator": "Ticket {channel} has been closed by its creator {closer.username}.",
+      "ticket_close_access_denied": "Only the ticket creator or a management member can confirm closing this ticket.",
+      "ticket_close_timeout": "Ticket close confirmation timed out. Please try `/ticket close` again.",
+      "ticket_transcript_header": "Ticket Transcript - {ticket_id} | Type: {ticket_type_name} | Created by: {creator.username} | Closed by: {closer.username} | Opened: {open_time} | Closed: {close_time} | Priority: {priority} | Status: {status_name} | Claimed by: {claimer.username}\n\n",
+      "ticket_no_permission": "You do not have permission to use this command in this channel.",
+      "ticket_not_ticket_channel": "This command can only be used in a ticket channel.",
+      "ticket_add_member_success": "{user} has been added to the ticket by {moderator}.",
+      "ticket_remove_member_success": "{user} has been removed from the ticket by {moderator}.",
+      "ticket_member_already_in_ticket": "{user} is already in this ticket.",
+      "ticket_member_not_in_ticket": "{user} is not in this ticket.",
+      "ticket_priority_set": "Ticket priority set to **{priority}** by {moderator}.",
+      "ticket_priority_invalid": "Invalid priority level. Available: Low, Medium, High, Critical.",
+      "ticket_info_embed_title": "Ticket Information - {ticket_id}",
+      "ticket_info_embed_description": "Opened by: {creator.username}\nTicket Type: {ticket_type_name}\nStatus: {status_name}\nPriority: {priority}\nClaimed by: {claimer.username}\nOpened at: {open_time}\nChannel: {channel}",
+      "ticket_status_set": "Ticket status set to **{status_name}** by {setter.username}.",
+      "ticket_status_invalid": "Invalid status. Available: Open, WaitingForCreator, AwaitingResponse, Escalated.",
+      "ticket_claimed": "Ticket claimed by {claimer.username}.",
+      "ticket_unclaimed": "Ticket unclaimed by {unclaimer.username}.",
+      "ticket_already_claimed": "This ticket is already claimed by {claimer.username}.",
+      "ticket_not_claimed": "This ticket is not currently claimed.",
+      "setup_panel_success": "Ticket panel set up successfully in {channel}.",
+      "config_update_success": "Ticket configuration for '{setting}' updated to '{value}'."
+    }
+  },
+  "commands_deployment": [
+    {
+      "module_name": "text_levels",
+      "base_command_name": "textlevels",
+      "base_command_description": "Manages text-based leveling for the guild.",
+      "register_globally": false,
+      "guild_ids": ["1275152745472589897"] 
+    },
+    {
+      "module_name": "voice_levels",
+      "base_command_name": "voicelevels",
+      "base_command_description": "Manages voice-based leveling for the guild.",
+      "register_globally": false,
+      "guild_ids": ["1275152745472589897"]
+    },
+    {
+      "module_name": "admin",
+      "base_command_name": "config",
+      "base_command_description": "Administrator commands for managing bot configuration.",
+      "register_globally": false,
+      "guild_ids": ["1275152745472589897"] 
+    },
+    {
+      "module_name": "tickets",
+      "base_command_name": "ticket",
+      "base_command_description": "Manage support tickets.",
+      "register_globally": false,
+      "guild_ids": ["1275152745472589897"] 
+    }
+  ]
+}
