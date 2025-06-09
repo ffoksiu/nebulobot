@@ -36,15 +36,15 @@ module.exports = {
             const users_table_name = `voicelevels_users_${guildId}`;
             try {
                 const [rows] = await connection.query(
-                    `SELECT vxpt, ovxpt, vlevel, ping_on_level_up FROM \`${users_table_name}\` WHERE user_id = ?`,
+                    `SELECT vxpt, ovxpt, vlevel, ping_on_level_up, muted, deafened, self_muted, self_deafened, streaming, video FROM \`${users_table_name}\` WHERE user_id = ?`,
                     [userId]
                 );
                 let userData = rows[0];
 
                 if (!userData) {
                     logger.debug(`[VLS] User ${userId} not found in DB. Inserting new record.`);
-                    await connection.query(`INSERT INTO \`${users_table_name}\` (user_id) VALUES (?)`, [userId]);
-                    userData = { vxpt: 0, ovxpt: 0, vlevel: 0, ping_on_level_up: 1 };
+                    await connection.query(`INSERT INTO \`${users_table_name}\` (user_id, muted, deafened, self_muted, self_deafened, streaming, video) VALUES (?, 0, 0, 0, 0, 0, 0)`, [userId]);
+                    userData = { vxpt: 0, ovxpt: 0, vlevel: 0, ping_on_level_up: 1, muted: 0, deafened: 0, self_muted: 0, self_deafened: 0, streaming: 0, video: 0 };
                 }
 
                 userData.vxpt += xpToAdd;
@@ -60,8 +60,8 @@ module.exports = {
                 }
 
                 await connection.query(
-                    `UPDATE \`${users_table_name}\` SET vxpt = ?, ovxpt = ?, vlevel = ? WHERE user_id = ?`,
-                    [userData.vxpt, userData.ovxpt, userData.vlevel, userId]
+                    `UPDATE \`${users_table_name}\` SET vxpt = ?, ovxpt = ?, vlevel = ?, muted = ?, deafened = ?, self_muted = ?, self_deafened = ?, streaming = ?, video = ? WHERE user_id = ?`,
+                    [userData.vxpt, userData.ovxpt, userData.vlevel, userData.muted, userData.deafened, userData.self_muted, userData.self_deafened, userData.streaming, userData.video, userId]
                 );
                 logger.debug(`[VLS] User ${userId} DB record updated: vxpt=${userData.vxpt}, ovxpt=${userData.ovxpt}, vlevel=${userData.vlevel}.`);
 
@@ -124,7 +124,7 @@ module.exports = {
             const channel_xp_table_name = `voicelevels_channels_${guildId}`;
             try {
                 await connection.query(
-                    `INSERT INTO \`${channel_xp_table_name}\` (user_id, channel_id, channel_xp) VALUES (?, ?, ?)
+                    `INSERT INTO ${channel_xp_table_name} (user_id, channel_id, channel_xp) VALUES (?, ?, ?)
                      ON DUPLICATE KEY UPDATE channel_xp = channel_xp + VALUES(channel_xp)`,
                     [userId, channelId, xpToAdd]
                 );
@@ -142,7 +142,7 @@ module.exports = {
             const colleague_xp_table_name = `voicelevels_colleagues_${guildId}`;
             try {
                 await connection.query(
-                    `INSERT INTO \`${colleague_xp_table_name}\` (user1_id, user2_id, colleague_xp) VALUES (?, ?, ?)
+                    `INSERT INTO ${colleague_xp_table_name} (user1_id, user2_id, colleague_xp) VALUES (?, ?, ?)
                      ON DUPLICATE KEY UPDATE colleague_xp = colleague_xp + VALUES(colleague_xp)`,
                     [id1, id2, xpToAdd]
                 );
@@ -156,14 +156,14 @@ module.exports = {
         const isChannelEligibleForXP = async (channelId, guildId, connection) => {
             const channels_config_table_name = `voicelevels_channels_config_${guildId}`;
             try {
-                const [rows] = await connection.query(`SELECT enabled FROM \`${channels_config_table_name}\` WHERE channel_id = ?`, [channelId]);
+                const [rows] = await connection.query(`SELECT enabled FROM ${channels_config_table_name} WHERE channel_id = ?`, [channelId]);
                 if (rows.length === 0) {
-                    await connection.query(`INSERT INTO \`${channels_config_table_name}\` (channel_id, enabled) VALUES (?, 1)`, [channelId]);
+                    await connection.query(`INSERT INTO ${channels_config_table_name} (channel_id, enabled) VALUES (?, 1)`, [channelId]);
                     return true;
                 }
                 return rows[0].enabled === 1;
             } catch (err) {
-                logger.error(`[VLS] Error checking channel eligibility for ${channelId} in guild ${guildId}: ${err.message}`);
+                logger.error(`[VLS] Error checking channel eligibility in guild ${guildId}: ${err.message}`);
                 return false;
             }
         };
@@ -184,13 +184,19 @@ module.exports = {
                         vxpt INT DEFAULT 0,
                         ovxpt INT DEFAULT 0,
                         vlevel INT DEFAULT 0,
-                        ping_on_level_up TINYINT(1) DEFAULT 1
+                        ping_on_level_up TINYINT(1) DEFAULT 1,
+                        muted TINYINT(1) DEFAULT 0,
+                        deafened TINYINT(1) DEFAULT 0,
+                        self_muted TINYINT(1) DEFAULT 0,
+                        self_deafened TINYINT(1) DEFAULT 0,
+                        streaming TINYINT(1) DEFAULT 0,
+                        video TINYINT(1) DEFAULT 0
                     );
                 `);
                 logger.debug(`[VLS] Ensured table '${users_table_name}' exists for guild ${guild.name} (${guild.id}).`);
 
                 await connection.query(`
-                    CREATE TABLE IF NOT EXISTS \`${channels_config_table_name}\` (
+                    CREATE TABLE IF NOT EXISTS ${channels_config_table_name} (
                         channel_id VARCHAR(20) PRIMARY KEY,
                         enabled TINYINT(1) DEFAULT 1
                     );
@@ -198,7 +204,7 @@ module.exports = {
                 logger.debug(`[VLS] Ensured table '${channels_config_table_name}' exists for guild ${guild.name} (${guild.id}).`);
 
                 await connection.query(`
-                    CREATE TABLE IF NOT EXISTS \`${channel_xp_table_name}\` (
+                    CREATE TABLE IF NOT EXISTS ${channel_xp_table_name} (
                         user_id VARCHAR(20),
                         channel_id VARCHAR(20),
                         channel_xp INT DEFAULT 0,
@@ -208,7 +214,7 @@ module.exports = {
                 logger.debug(`[VLS] Ensured table '${channel_xp_table_name}' exists for guild ${guild.name} (${guild.id}).`);
 
                 await connection.query(`
-                    CREATE TABLE IF NOT EXISTS \`${colleague_xp_table_name}\` (
+                    CREATE TABLE IF NOT EXISTS ${colleague_xp_table_name} (
                         user1_id VARCHAR(20),
                         user2_id VARCHAR(20),
                         colleague_xp INT DEFAULT 0,
@@ -225,10 +231,11 @@ module.exports = {
         });
 
         const isUserActiveInVoice = (state, guild) => {
-            return state.channel && !state.member.user.bot && !state.selfMute && !state.serverMute && !state.selfDeaf && !state.serverDeaf && state.channel.id !== guild.afkChannelId;
+            const { channel, member, selfMute, serverMute, selfDeaf, serverDeaf, streaming, video } = state;
+            return channel && !member.user.bot && !selfMute && !serverMute && !selfDeaf && !serverDeaf && channel.id !== guild.afkChannelId && !streaming && !video;
         };
 
-        const grantXPAndSave = async (userId, guildId, channelId, lastXPCheckTime, currentTime) => {
+        const grantXPAndSave = async (userId, guildId, channelId, lastXPCheckTime, currentTime, muted, deafened, self_muted, self_deafened, streaming, video) => {
             let connection;
             try {
                 connection = await db_pool.getConnection();
@@ -256,7 +263,7 @@ module.exports = {
 
                 if (member.voice.channel) {
                     const activeMembersInChannel = member.voice.channel.members.filter(m =>
-                        m.id !== userId && isUserActiveInVoice({ channel: m.voice.channel, member: m, selfMute: m.voice.selfMute, serverMute: m.voice.serverMute, selfDeaf: m.voice.selfDeaf, serverDeaf: m.voice.serverDeaf }, guild)
+                        m.id !== userId && isUserActiveInVoice({ channel: m.voice.channel, member: m, selfMute: m.voice.selfMute, serverMute: m.voice.serverMute, selfDeaf: m.voice.selfDeaf, serverDeaf: m.voice.serverDeaf, streaming: m.voice.streaming, video: m.voice.selfVideo }, guild)
                     );
 
                     for (const colleagueMember of activeMembersInChannel.values()) {
@@ -280,6 +287,13 @@ module.exports = {
             const guild = newState.guild;
             const key = `${guildId}-${userId}`;
 
+            const muted = newState.serverMute;
+            const deafened = newState.newState.serverDeaf;
+            const self_muted = newState.selfMute;
+            const self_deafened = newState.selfDeaf;
+            const streaming = newState.streaming;
+            const video = newState.selfVideo;
+
             if (newState.member && newState.member.user.bot) {
                 logger.debug(`[VLS] Ignoring bot ${newState.member.user.tag} (${userId}).`);
                 return;
@@ -291,7 +305,8 @@ module.exports = {
                 const userData = activeVoiceUsers.get(key);
                 if (!isActive || (newState.channel && newState.channel.id !== userData.channelId)) {
                     logger.debug(`[VLS] User ${userId} (${guildId}) leaving/changing/deactivating. Calculating final XP.`);
-                    await grantXPAndSave(userId, guildId, userData.channelId, userData.lastXPCheckTime, Date.now());
+                    const { muted, deafened, self_muted, self_deafened, streaming, video } = userData;
+                    await grantXPAndSave(userId, guildId, userData.channelId, userData.lastXPCheckTime, Date.now(), muted, deafened, self_muted, self_deafened, streaming, video);
                     activeVoiceUsers.delete(key);
                     logger.debug(`[VLS] User ${userId} (${guildId}) removed from active voice users map.`);
                 }
@@ -305,7 +320,13 @@ module.exports = {
                     if (channelEligible) {
                         activeVoiceUsers.set(key, {
                             channelId: newState.channel.id,
-                            lastXPCheckTime: Date.now()
+                            lastXPCheckTime: Date.now(),
+                            muted: muted,
+                            deafened: deafened,
+                            self_muted: self_muted,
+                            self_deafened: self_deafened,
+                            streaming: streaming,
+                            video: video
                         });
                         logger.debug(`[VLS] User ${userId} (${guildId}) added to active voice users map in channel ${newState.channel.name}.`);
                     } else {
@@ -329,14 +350,26 @@ module.exports = {
                 const guild = client.guilds.cache.get(guildId);
                 const member = guild ? await guild.members.fetch(userId).catch(() => null) : null;
 
-                if (!member || !member.voice.channel || member.voice.channel.id !== userData.channelId || !isUserActiveInVoice({ channel: member.voice.channel, member: member, selfMute: member.voice.selfMute, serverMute: member.voice.serverMute, selfDeaf: member.voice.selfDeaf, serverDeaf: member.voice.serverDeaf }, guild)) {
+                if (!member || !member.voice.channel || member.voice.channel.id !== userData.channelId ||
+                    !isUserActiveInVoice({
+                        channel: member.voice.channel,
+                        member: member,
+                        selfMute: member.voice.selfMute,
+                        serverMute: member.voice.serverMute,
+                        selfDeaf: member.voice.selfDeaf,
+                        serverDeaf: member.voice.serverDeaf,
+                        streaming: member.voice.streaming,
+                        video: member.voice.selfVideo
+                    }, guild)) {
                     logger.debug(`[VLS] User ${userId} (${guildId}) no longer active during interval check. Removing.`);
-                    await grantXPAndSave(userId, guildId, userData.channelId, userData.lastXPCheckTime, currentTime);
+                    const { muted, deafened, self_muted, self_deafened, streaming, video } = userData;
+                    await grantXPAndSave(userId, guildId, userData.channelId, userData.lastXPCheckTime, currentTime, muted, deafened, self_muted, self_deafened, streaming, video);
                     activeVoiceUsers.delete(key);
                     continue;
                 }
 
-                await grantXPAndSave(userId, guildId, userData.channelId, userData.lastXPCheckTime, currentTime);
+                const { muted, deafened, self_muted, self_deafened, streaming, video } = userData;
+                await grantXPAndSave(userId, guildId, userData.channelId, userData.lastXPCheckTime, currentTime, muted, deafened, self_muted, self_deafened, streaming, video);
                 userData.lastXPCheckTime = currentTime;
                 activeVoiceUsers.set(key, userData);
             }

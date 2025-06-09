@@ -4,9 +4,11 @@ const { ChannelType, PermissionsBitField, ButtonBuilder, ButtonStyle, ActionRowB
 const activeTickets = new Map();
 const pendingCloseConfirmations = new Map(); 
 
+let _client; 
+
 function generateHtmlTranscript(ticketData, messages, guild, creator, closer, claimedBy, transcriptMessages) {
-    const ticketType = guild.client.config.tickets.ticket_types.find(type => type.id === ticketData.ticket_type_id);
-    const statusInfo = guild.client.config.tickets.ticket_statuses[ticketData.status];
+    const ticketType = _client.config.tickets.ticket_types.find(type => type.id === ticketData.ticket_type_id);
+    const statusInfo = _client.config.tickets.ticket_statuses[ticketData.status];
     const header = messages.ticket_transcript_header
         .replace('{ticket_id}', ticketData.ticket_id)
         .replace('{ticket_type_name}', ticketType ? ticketType.name : 'Unknown')
@@ -107,14 +109,13 @@ module.exports = {
             logger.error('[Tickets] Database connection not available. Tickets module cannot be initialized.');
             return;
         }
+        _client = client; 
         logger.tickets('Initializing Tickets module...');
 
         const ticketsConfig = config.tickets;
-        client.config = config; 
+        _client.config = config;
 
-        client.config = config; 
-
-        client.guilds.cache.forEach(async guild => {
+        _client.guilds.cache.forEach(async guild => {
             const tickets_config_table_name = `tickets_config_${guild.id}`;
             const tickets_active_table_name = `tickets_active_${guild.id}`;
             
@@ -175,7 +176,7 @@ module.exports = {
             }
         });
 
-        client.on('interactionCreate', async interaction => {
+        _client.on('interactionCreate', async interaction => { 
             if (!interaction.isButton()) return;
 
             const guild = interaction.guild;
@@ -233,6 +234,7 @@ module.exports = {
 
                 } catch (error) {
                     logger.error(`[Tickets] Error showing modal for ticket type ${ticketType.id}: ${error.message}`);
+                    logger.debug(`[Tickets] Stack: ${error.stack}`);
                     await interaction.reply({ content: 'An error occurred. Please try again later.', ephemeral: true });
                 } finally {
                     if (connection) connection.release();
@@ -276,7 +278,7 @@ module.exports = {
             }
         });
 
-        client.on('interactionCreate', async interaction => {
+        _client.on('interactionCreate', async interaction => { 
             if (!interaction.isModalSubmit()) return;
 
             const guild = interaction.guild;
@@ -311,7 +313,7 @@ module.exports = {
                 for (const field of ticketType.modal_fields) {
                     const value = interaction.fields.getTextInputValue(field.custom_id);
                     modalData[field.custom_id] = value;
-                    modalDataEmbedFields += `**${field.label}:**\n${value}\n`;
+                    modalDataEmbedFields += `**${field.label}:**\n${value}\n\n`; // Added extra newline
                 }
 
                 const initialStatus = 'Open';
@@ -369,22 +371,21 @@ module.exports = {
                 const creatorPing = user.toString();
                 const statusName = initialStatus;
 
-                const initialMessageContent = messages.ticket_channel_initial_message_content
-                    .replace('{ping_roles}', pingRoles.trim())
-                    .replace('{creator_ping}', creatorPing)
-                    .replace('{ticket_type_name}', ticketType.name)
-                    .replace('{priority}', ticketType.default_priority)
-                    .replace('{status_name}', statusName)
-                    .replace('{modal_data_embed_fields}', modalDataEmbedFields);
+                let initialEmbedDescription = `${pingRoles.trim()} ${creatorPing} Twój ticket został utworzony. Administratorzy wkrótce się z Tobą skontaktują.\n\nTyp Ticketu: **${ticketType.name}**\nStatus: **${statusName}**`;
+
+                if (modalDataEmbedFields.trim().length > 0) {
+                    initialEmbedDescription += `\n\n**Szczegóły zgłoszenia:**\n${modalDataEmbedFields}`;
+                }
+                initialEmbedDescription += `\nAby zamknąć ten ticket, użyj komendy \`/ticket close\`.`;
+
 
                 await ticketChannel.send({
-                    content: initialMessageContent,
                     embeds: [
                         new EmbedBuilder()
                             .setTitle(`Ticket ${ticketId} - ${ticketType.name}`)
-                            .setDescription(`Hello ${user}, a staff member will be with you shortly.`)
+                            .setDescription(initialEmbedDescription)
                             .setColor(ticketsConfig.ticket_statuses[initialStatus]?.color || 'Blurple')
-                            .setFooter({ text: `Ticket ID: ${ticketId} | Type: ${ticketType.name}` })
+                            .setFooter({ text: `Ticket ID: ${ticketId} | Type: ${ticketType.name} | ${new Date().toLocaleString()}` }) // Added time
                     ]
                 });
 
@@ -400,11 +401,11 @@ module.exports = {
             }
         });
 
-        client.on('channelDelete', async channel => {
+        _client.on('channelDelete', async channel => { 
             if (!activeTickets.has(channel.id)) return;
 
             const ticketData = activeTickets.get(channel.id);
-            const guild = client.guilds.cache.get(ticketData.guildId);
+            const guild = _client.guilds.cache.get(ticketData.guildId);
             if (!guild) return;
 
             let connection;
@@ -415,7 +416,7 @@ module.exports = {
                 activeTickets.delete(channel.id);
                 logger.tickets(`Ticket ${ticketData.ticketId} for channel ${channel.name} marked as closed due to channel deletion.`);
             } catch (error) {
-                logger.error(`[Tickets] Error marking ticket ${ticketData.ticketId} as closed on channelDelete: ${e.message}`);
+                logger.error(`[Tickets] Error marking ticket ${ticketData.ticketId} as closed on channelDelete: ${error.message}`);
             } finally {
                 if (connection) connection.release();
             }
@@ -436,7 +437,7 @@ module.exports = {
             if (ticketRows.length === 0) return { success: false, message: messages.ticket_not_ticket_channel };
 
             const ticketData = ticketRows[0];
-            const guild = await client.guilds.fetch(guildId); 
+            const guild = await _client.guilds.fetch(guildId);
             const ticketChannel = guild.channels.cache.get(channelId);
             const closer = await guild.members.fetch(closerId);
             const creator = await guild.members.fetch(ticketData.creator_id);
@@ -501,7 +502,7 @@ module.exports = {
         let connection;
         try {
             connection = await db_pool.getConnection();
-            const guild = await client.guilds.fetch(guildId);
+            const guild = await _client.guilds.fetch(guildId);
             const ticketChannel = guild.channels.cache.get(channelId);
             const userToAdd = await guild.members.fetch(userIdToAdd);
             const moderator = await guild.members.fetch(moderatorId);
@@ -531,7 +532,7 @@ module.exports = {
         let connection;
         try {
             connection = await db_pool.getConnection();
-            const guild = await client.guilds.fetch(guildId);
+            const guild = await _client.guilds.fetch(guildId);
             const ticketChannel = guild.channels.cache.get(channelId);
             const userToRemove = await guild.members.fetch(userIdToRemove);
             const moderator = await guild.members.fetch(moderatorId);
@@ -571,7 +572,7 @@ module.exports = {
 
             if (updateResult.affectedRows === 0) return { success: false, message: messages.ticket_not_ticket_channel };
 
-            const guild = await client.guilds.fetch(guildId);
+            const guild = await _client.guilds.fetch(guildId);
             const moderator = await guild.members.fetch(moderatorId);
             const ticketChannel = guild.channels.cache.get(channelId);
             logger.tickets(`Ticket ${channelId} priority set to ${priority} by ${moderator.user.tag}.`);
@@ -580,6 +581,39 @@ module.exports = {
             if (ticketData) {
                 ticketData.priority = priority;
                 activeTickets.set(channelId, ticketData);
+            }
+
+            const adminTicketChannelId = config.tickets.admin_ticket_channel_id;
+            if (adminTicketChannelId) {
+                const adminChannel = guild.channels.cache.get(adminTicketChannelId);
+                if (adminChannel && adminChannel.type === ChannelType.GuildText) {
+                    const ticketCreator = await guild.members.fetch(ticketData.userId);
+                    const ticketType = config.tickets.ticket_types.find(type => type.id === ticketData.typeId);
+
+                    const pingRoles = [
+                        ...(config.tickets.support_role_ids || []),
+                        ...(config.tickets.management_role_ids || [])
+                    ].map(roleId => `<@&${roleId}>`).join(' ');
+
+                    const priorityNotificationEmbed = new EmbedBuilder()
+                        .setTitle(`Ticket Priority Updated: #${ticketData.ticketId}`)
+                        .setDescription(`Ticket ${ticketChannel.toString()} (Type: ${ticketType ? ticketType.name : 'Unknown'}) has had its priority set to **${priority}** by ${moderator.toString()}.`)
+                        .addFields(
+                            { name: 'Ticket Creator', value: ticketCreator.toString(), inline: true },
+                            { name: 'New Priority', value: priority, inline: true }
+                        )
+                        .setColor(config.tickets.ticket_statuses[ticketData.status]?.color || 'Blue')
+                        .setFooter({ text: `Ticket ID: ${ticketData.ticketId}` })
+                        .setTimestamp();
+
+                    await adminChannel.send({
+                        content: pingRoles.trim() ? `${pingRoles.trim()} Attention!` : 'Attention!',
+                        embeds: [priorityNotificationEmbed]
+                    });
+                    logger.tickets(`Sent priority notification for ticket ${ticketData.ticketId} to admin channel ${adminChannel.name}.`);
+                } else {
+                    logger.warn(`[Tickets] Configured admin_ticket_channel_id (${adminTicketChannelId}) is not a valid text channel or does not exist.`);
+                }
             }
 
             return { success: true, message: messages.ticket_priority_set.replace('{priority}', priority).replace('{moderator}', moderator.user.username) };
@@ -610,23 +644,43 @@ module.exports = {
 
             if (updateResult.affectedRows === 0) return { success: false, message: messages.ticket_not_ticket_channel };
 
-            const guild = await client.guilds.fetch(guildId);
+            const guild = await _client.guilds.fetch(guildId);
             const setter = await guild.members.fetch(setterId);
             const ticketChannel = guild.channels.cache.get(channelId);
 
             const ticketData = activeTickets.get(channelId);
             if (ticketData) {
-                ticketData.status = newStatus;
+                ticketData.status = newStatus; // Update status before using it for channel name
                 activeTickets.set(channelId, ticketData);
+            } else {
+                // If ticketData is not in activeTickets, fetch it from DB
+                const [currentTicketRows] = await connection.query(`SELECT ticket_type_id, creator_id FROM \`${tickets_active_table_name}\` WHERE channel_id = ?`, [channelId]);
+                if (currentTicketRows.length > 0) {
+                    ticketData.typeId = currentTicketRows[0].ticket_type_id;
+                    ticketData.userId = currentTicketRows[0].creator_id;
+                } else {
+                    logger.warn(`[Tickets] Could not find active ticket data for channel ${channelId} when setting status.`);
+                    return { success: false, message: messages.ticket_not_ticket_channel };
+                }
             }
             
             const statusEmoji = config.tickets.ticket_statuses[newStatus]?.emoji || '';
             const channelNameTemplate = config.tickets.channel_naming_template || '{status_emoji}-{type_id}-{username}-{user_id}';
+            
+            // Fetch creator username for channel naming
+            let creatorUsername = 'unknown-user';
+            try {
+                const creator = await guild.members.fetch(ticketData.userId);
+                creatorUsername = creator.user.username;
+            } catch (e) {
+                logger.warn(`[Tickets] Could not fetch creator username for ticket ${channelId}: ${e.message}`);
+            }
+
             const oldName = ticketChannel.name;
             const newName = channelNameTemplate
                 .replace('{status_emoji}', statusEmoji)
                 .replace('{type_id}', ticketData.typeId)
-                .replace('{username}', ticketChannel.name.split('-').pop())
+                .replace('{username}', creatorUsername) // Use fetched username
                 .replace('{user_id}', ticketData.userId)
                 .toLowerCase()
                 .replace(/[^a-z0-9-]/g, '-')
@@ -658,7 +712,7 @@ module.exports = {
 
             if (ticketRows.length === 0) return { success: false, message: messages.ticket_not_ticket_channel };
             if (ticketRows[0].claimed_by_id) {
-                const existingClaimer = await client.guilds.fetch(guildId).then(g => g.members.fetch(ticketRows[0].claimed_by_id));
+                const existingClaimer = await _client.guilds.fetch(guildId).then(g => g.members.fetch(ticketRows[0].claimed_by_id)); 
                 return { success: false, message: messages.ticket_already_claimed.replace('{claimer.username}', existingClaimer.user.username) };
             }
 
@@ -667,7 +721,7 @@ module.exports = {
                 [claimerId, channelId]
             );
 
-            const guild = await client.guilds.fetch(guildId);
+            const guild = await _client.guilds.fetch(guildId);
             const claimer = await guild.members.fetch(claimerId);
             const ticketChannel = guild.channels.cache.get(channelId);
             
@@ -706,7 +760,7 @@ module.exports = {
                 [channelId]
             );
 
-            const guild = await client.guilds.fetch(guildId);
+            const guild = await _client.guilds.fetch(guildId);
             const unclaimer = await guild.members.fetch(unclaimerId);
             const ticketChannel = guild.channels.cache.get(channelId);
 
@@ -738,7 +792,7 @@ module.exports = {
             if (ticketRows.length === 0) return { success: false, message: messages.ticket_not_ticket_channel };
 
             const ticketData = ticketRows[0];
-            const guild = await client.guilds.fetch(guildId);
+            const guild = await _client.guilds.fetch(guildId);
             const creator = await guild.members.fetch(ticketData.creator_id);
             const ticketChannel = guild.channels.cache.get(channelId);
             const ticketType = config.tickets.ticket_types.find(type => type.id === ticketData.ticket_type_id);
@@ -792,6 +846,22 @@ module.exports = {
             if (!panelChannel || panelChannel.type !== ChannelType.GuildText) {
                 return { success: false, message: "Invalid panel channel provided. Must be a text channel." };
             }
+            
+            const botPermissions = panelChannel.permissionsFor(guild.members.me);
+            const requiredPermissions = [
+                PermissionsBitField.Flags.ViewChannel,
+                PermissionsBitField.Flags.SendMessages,
+                PermissionsBitField.Flags.EmbedLinks,
+                PermissionsBitField.Flags.ReadMessageHistory 
+            ];
+            const missingPerms = requiredPermissions.filter(perm => !botPermissions.has(perm));
+
+            if (missingPerms.length > 0) {
+                const missingPermNames = missingPerms.map(perm => Object.keys(PermissionsBitField.Flags).find(key => PermissionsBitField.Flags[key] === perm));
+                logger.error(`[Tickets] Bot lacks required permissions in panel channel ${panelChannel.name} (${panelChannel.id}): ${missingPermNames.join(', ')}.`);
+                return { success: false, message: `I do not have the required permissions in ${panelChannel.toString()} (missing: ${missingPermNames.join(', ')}). Please grant them.` };
+            }
+
             const categoryChannel = guild.channels.cache.get(categoryId);
             if (!categoryChannel || categoryChannel.type !== ChannelType.GuildCategory) {
                 return { success: false, message: "Invalid category channel provided. Must be a category." };
@@ -848,26 +918,35 @@ module.exports = {
             const existingPanelMessageId = configRows[0]?.panel_message_id;
 
             let panelMessage;
-            if (existingPanelMessageId) {
-                try {
-                    panelMessage = await panelChannel.messages.fetch(existingPanelMessageId);
-                    await panelMessage.edit({ embeds: [panelEmbed], components: actionRows });
-                    logger.tickets(`Updated existing ticket panel in ${panelChannel.name}.`);
-                } catch (e) {
-                    logger.warn(`[Tickets] Could not find existing panel message ${existingPanelMessageId}. Sending a new one.`);
-                    panelMessage = await panelChannel.send({ embeds: [panelEmbed], components: actionRows });
+            try {
+                if (existingPanelMessageId) {
+                    logger.debug(`[Tickets] Attempting to delete existing panel message ${existingPanelMessageId} in channel ${panelChannel.name}.`);
+                    try {
+                        const oldPanelMessage = await panelChannel.messages.fetch(existingPanelMessageId);
+                        await oldPanelMessage.delete();
+                        logger.debug(`[Tickets] Successfully deleted old panel message.`);
+                    } catch (deleteError) {
+                        logger.warn(`[Tickets] Could not delete old panel message ${existingPanelMessageId}: ${deleteError.message}. It might already be gone or permissions changed.`);
+                    }
                 }
-            } else {
+                
+                logger.debug(`[Tickets] Sending new panel message to ${panelChannel.name}.`);
                 panelMessage = await panelChannel.send({ embeds: [panelEmbed], components: actionRows });
+                logger.tickets(`Ticket panel set up for guild ${guild.name} in ${panelChannel.name}. New message ID: ${panelMessage.id}`);
+                
+                await connection.query(`UPDATE \`${tickets_config_table_name}\` SET panel_message_id = ? WHERE guild_id = ?`, [panelMessage.id, guildId]);
+
+            } catch (sendEditError) {
+                logger.error(`[Tickets] Failed to send ticket panel message in channel ${panelChannel.name} (${panelChannel.id}): ${sendEditError.message}`);
+                logger.debug(`[Tickets] Stack for send/edit error: ${sendEditError.stack}`);
+                return { success: false, message: `Failed to send the panel message in ${panelChannel.toString()}. Please check bot permissions or if the channel is locked.` };
             }
 
-            await connection.query(`UPDATE \`${tickets_config_table_name}\` SET panel_message_id = ? WHERE guild_id = ?`, [panelMessage.id, guildId]);
-
-            logger.tickets(`Ticket panel set up for guild ${guild.name} in ${panelChannel.name}.`);
             return { success: true, message: messages.setup_panel_success.replace('{channel}', panelChannel.toString()) };
 
         } catch (error) {
             logger.error(`[Tickets] Error setting up ticket panel for guild ${guildId}: ${error.message}`);
+            logger.debug(`[Tickets] Detailed error during setupTicketPanel: ${error.stack}`);
             return { success: false, message: `An error occurred while setting up the ticket panel: ${error.message}` };
         } finally {
             if (connection) connection.release();

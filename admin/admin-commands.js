@@ -3,186 +3,225 @@ const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder, ActionRowBuilder
 const fs = require('fs');
 const path = require('path');
 
-module.exports = {
-    init: (config, db_pool) => {
-        logger.admin('Admin Commands module initialization requested.');
-        const adminCmdDeployment = config.commands_deployment.find(cmd => cmd.module_name === 'admin');
-        const baseCommandName = adminCmdDeployment ? adminCmdDeployment.base_command_name : 'config';
-        const baseCommandDescription = adminCmdDeployment ? adminCmdDeployment.base_command_description : 'Administrator commands for managing bot configuration.';
+module.exports.commandDefinition = null;
+module.exports.commandName = '';
 
-        const configCommand = new SlashCommandBuilder()
-            .setName(baseCommandName)
-            .setDescription(baseCommandDescription)
-            .setDMPermission(false)
-            .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-            .addSubcommand(subcommand =>
-                subcommand
-                    .setName('reload')
-                    .setDescription('Reloads the configuration file from disk (updates in-memory config).')
-            )
-            .addSubcommandGroup(group =>
-                group
-                    .setName('main')
-                    .setDescription('Configure main bot settings.')
-                    .addSubcommand(subcommand =>
-                        subcommand.setName('menu').setDescription('View and manage main bot settings.')
-                    )
-            )
-            .addSubcommandGroup(group =>
-                group
-                    .setName('database')
-                    .setDescription('Configure database settings.')
-                    .addSubcommand(subcommand =>
-                        subcommand.setName('menu').setDescription('View and manage database settings.')
-                    )
-            )
-            .addSubcommandGroup(group =>
-                group
-                    .setName('textlevels')
-                    .setDescription('Configure text leveling settings.')
-                    .addSubcommand(subcommand =>
-                        subcommand.setName('menu').setDescription('View and manage text level settings.')
-                    )
-            )
-            .addSubcommandGroup(group =>
-                group
-                    .setName('voicelevels')
-                    .setDescription('Configure voice leveling settings.')
-                    .addSubcommand(subcommand =>
-                        subcommand.setName('menu').setDescription('View and manage voice level settings.')
-                    )
-            )
-            .addSubcommandGroup(group =>
-                group
-                    .setName('tickets')
-                    .setDescription('Configure ticket system settings.')
-                    .addSubcommand(subcommand =>
-                        subcommand.setName('menu').setDescription('View and manage ticket system settings.')
-                    )
-            );
+module.exports.init = (config, db_pool) => {
+    logger.admin('Admin Commands module initialization requested.');
+    const adminCmdDeployment = config.commands_deployment.find(cmd => cmd.module_name === 'admin');
+    const baseCommandName = adminCmdDeployment ? adminCmdDeployment.base_command_name : 'config';
+    const baseCommandDescription = adminCmdDeployment ? adminCmdDeployment.base_command_description : 'Administrator commands for managing bot configuration.';
 
-        this.commandDefinition = configCommand;
-        this.commandName = configCommand.name;
+    const configCommand = new SlashCommandBuilder()
+        .setName(baseCommandName)
+        .setDescription(baseCommandDescription)
+        .setDMPermission(false)
+        .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('reload')
+                .setDescription('Reloads the configuration file from disk (updates in-memory config).')
+        )
+        .addSubcommandGroup(group =>
+            group
+                .setName('main')
+                .setDescription('Configure main bot settings.')
+                .addSubcommand(subcommand =>
+                    subcommand.setName('menu').setDescription('View and manage main bot settings.')
+                )
+        )
+        .addSubcommandGroup(group =>
+            group
+                .setName('database')
+                .setDescription('Configure database settings.')
+                .addSubcommand(subcommand =>
+                    subcommand.setName('menu').setDescription('View and manage database settings.')
+                )
+        )
+        .addSubcommandGroup(group =>
+            group
+                .setName('textlevels')
+                .setDescription('Configure text leveling settings.')
+                .addSubcommand(subcommand =>
+                    subcommand.setName('menu').setDescription('View and manage text level settings.')
+                )
+        )
+        .addSubcommandGroup(group =>
+            group
+                .setName('voicelevels')
+                .setDescription('Configure voice leveling settings.')
+                .addSubcommand(subcommand =>
+                    subcommand.setName('menu').setDescription('View and manage voice level settings.')
+                )
+        )
+        .addSubcommandGroup(group =>
+            group
+                .setName('tickets')
+                .setDescription('Configure ticket system settings.')
+                .addSubcommand(subcommand =>
+                    subcommand.setName('menu').setDescription('View and manage ticket system settings.')
+                )
+        );
 
-        logger.admin(`Admin Commands module initialized. Command name: ${this.commandName}`);
+    module.exports.commandDefinition = configCommand;
+    module.exports.commandName = configCommand.name;
+    logger.admin(`Admin Commands module initialized. Command name: ${module.exports.commandName}`);
+    return module.exports;
+};
 
-        return this;
-    },
+module.exports.handleInteraction = async (interaction, db_pool, config) => {
+        logger.debug('--- DEBUG: Inside handleInteraction (Admin Commands) ---');
+    logger.debug(`Received interaction object: ${interaction ? 'DEFINED' : 'UNDEFINED'}`);
+    if (interaction) {
+        logger.debug(`Interaction type: ${typeof interaction}`);
+        logger.debug(`Interaction isChatInputCommand: ${interaction.isChatInputCommand()}`);
+        logger.debug(`Interaction commandName: ${interaction.commandName}`);
+        if (interaction.options) { 
+            logger.debug(`Interaction subcommandGroup: ${interaction.options.getSubcommandGroup()}`);
+        }
+    }
+    logger.debug('--- END DEBUG: Inside handleInteraction ---');
+    if (!interaction.isChatInputCommand()) return;
 
-    handleInteraction: async (interaction, db_pool, config) => {
-        if (!interaction.isChatInputCommand()) return;
+    const { options } = interaction;
+    const subcommand = options.getSubcommand();
+    const subcommandGroup = options.getSubcommandGroup();
+    const messages = config.admin.messages;
 
-        const { options } = interaction;
-        const subcommand = options.getSubcommand();
-        const subcommandGroup = options.getSubcommandGroup();
-        const messages = config.admin.messages;
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        await interaction.reply({ content: messages.no_permission, ephemeral: true });
+        return;
+    }
 
-        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+    if (subcommand === 'reload') {
+        return;
+    }
+
+    switch (subcommandGroup) {
+        case 'main':
+            await sendConfigMenu(interaction, config, 'main', 'Main Bot Settings');
+            break;
+        case 'database':
+            await sendConfigMenu(interaction, config, 'database', 'Database Settings');
+            break;
+        case 'textlevels':
+            await sendConfigMenu(interaction, config, 'text_levels', 'Text Levels Settings');
+            break;
+        case 'voicelevels':
+            await sendConfigMenu(interaction, config, 'voice_levels', 'Voice Levels Settings');
+            break;
+        case 'tickets':
+            await sendTicketsConfigMenu(interaction, config);
+            break;
+        default:
+            await interaction.reply({ content: 'Unknown configuration module.', ephemeral: true });
+            break;
+    }
+};
+
+module.exports.handleConfigInteraction = async (interaction, db_pool, config) => {
+    const messages = config.admin.messages;
+    const [prefix, module, action, ...args] = interaction.customId.split('_');
+
+    if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+        if (interaction.deferred || interaction.replied) {
+            await interaction.followUp({ content: messages.no_permission, ephemeral: true });
+        } else {
             await interaction.reply({ content: messages.no_permission, ephemeral: true });
-            return;
         }
+        return;
+    }
 
-        if (subcommand === 'reload') {
-            return;
-        }
-
-        switch (subcommandGroup) {
-            case 'main':
-                await sendConfigMenu(interaction, config, 'main', 'Main Bot Settings');
+    if (interaction.isButton()) {
+        switch (`${module}_${action}`) {
+            case 'tickets_panel':
+                await sendTicketsPanelSetupModal(interaction, config);
                 break;
-            case 'database':
-                await sendConfigMenu(interaction, config, 'database', 'Database Settings');
+            case 'tickets_responses':
+                await sendTicketsResponsesModal(interaction, config);
                 break;
-            case 'textlevels':
-                await sendConfigMenu(interaction, config, 'text_levels', 'Text Levels Settings');
+            case 'tickets_types':
+                await sendTicketTypesMenu(interaction, config);
                 break;
-            case 'voicelevels':
-                await sendConfigMenu(interaction, config, 'voice_levels', 'Voice Levels Settings');
+            case 'tickets_addtype':
+                await sendTicketTypeAddModal(interaction, config);
                 break;
-            case 'tickets':
+            case 'tickets_edittype':
+                await handleTicketTypeEditModalSubmit(interaction, config, args[0]);
+                break;
+            case 'tickets_deletetype':
+                await handleTicketTypeDelete(interaction, config, args[0]);
+                break;
+            case 'tickets_edit_support_roles':
+                await sendEditRolesModal(interaction, config, 'support_role_ids');
+                break;
+            case 'tickets_edit_management_roles':
+                await sendEditRolesModal(interaction, config, 'management_role_ids');
+                break;
+            case 'tickets_edit_admin_ticket_channel_id':
+                await sendGenericEditModal(interaction, config, 'tickets', 'admin_ticket_channel_id');
+                break;
+            case 'tickets_edit_ticket_statuses':
+                await sendGenericEditModal(interaction, config, 'tickets', 'ticket_statuses');
+                break;
+            case 'tickets_backtomain':
                 await sendTicketsConfigMenu(interaction, config);
                 break;
             default:
-                await interaction.reply({ content: 'Unknown configuration module.', ephemeral: true });
+                if (action.startsWith('edit_') && args.length === 0) { 
+                    const fieldName = action.substring('edit_'.length);
+                    await sendGenericEditModal(interaction, config, module, fieldName);
+                } else {
+                    await interaction.reply({ content: 'Unknown config button action.', ephemeral: true });
+                }
                 break;
         }
-    },
-
-    handleConfigInteraction: async (interaction, db_pool, config) => {
-        const messages = config.admin.messages;
-        const [prefix, module, action, ...args] = interaction.customId.split('_');
-
-        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
-            if (interaction.deferred || interaction.replied) {
-                await interaction.followUp({ content: messages.no_permission, ephemeral: true });
-            } else {
-                await interaction.reply({ content: messages.no_permission, ephemeral: true });
-            }
-            return;
+    } else if (interaction.isStringSelectMenu()) {
+        if (action === 'edit' && args[0] === 'field') {
+            const fieldName = interaction.values[0];
+            await sendGenericEditModal(interaction, config, module, fieldName);
+        } else {
+            await interaction.reply({ content: 'Unknown select menu action.', ephemeral: true });
         }
-
-        if (interaction.isButton()) {
-            switch (`${module}_${action}`) {
-                case 'tickets_panel':
-                    await sendTicketsPanelSetupModal(interaction, config);
-                    break;
-                case 'tickets_responses':
-                    await sendTicketsResponsesModal(interaction, config);
-                    break;
-                case 'tickets_types':
-                    await sendTicketTypesMenu(interaction, config);
-                    break;
-                case 'tickets_addtype':
-                    await sendTicketTypeAddModal(interaction, config);
-                    break;
-                case 'tickets_edittype':
-                    await sendTicketTypeEditModal(interaction, config, args[0]);
-                    break;
-                case 'tickets_deletetype':
-                    await handleTicketTypeDelete(interaction, config, args[0]);
-                    break;
-                case 'tickets_backtomain':
-                    await sendTicketsConfigMenu(interaction, config);
-                    break;
-                case 'main_edit':
-                case 'database_edit':
-                case 'text_levels_edit':
-                case 'voice_levels_edit':
-                    await sendGenericEditModal(interaction, config, module, args.join('_'));
-                    break;
-                default:
-                    await interaction.reply({ content: 'Unknown config button action.', ephemeral: true });
-                    break;
-            }
-        } else if (interaction.isModalSubmit()) {
-            switch (`${module}_${action}`) {
-                case 'tickets_panelsetup':
-                    await handleTicketsPanelSetupModalSubmit(interaction, config);
-                    break;
-                case 'tickets_responsesedit':
-                    await handleTicketsResponsesModalSubmit(interaction, config);
-                    break;
-                case 'tickets_typeadd':
-                    await handleTicketTypeAddModalSubmit(interaction, config);
-                    break;
-                case 'tickets_typeedit':
-                    await handleTicketTypeEditModalSubmit(interaction, config, args[0]);
-                    break;
-                case 'main_editfield':
-                case 'database_editfield':
-                case 'text_levels_editfield':
-                case 'voice_levels_editfield':
-                    await handleGenericEditModalSubmit(interaction, config, module, args.join('_'));
-                    break;
-                default:
-                    await interaction.reply({ content: 'Unknown config modal submission.', ephemeral: true });
-                    break;
-            }
+    } else if (interaction.isModalSubmit()) {
+        switch (`${module}_${action}`) {
+            case 'tickets_panelsetup':
+                await handleTicketsPanelSetupModalSubmit(interaction, config);
+                break;
+            case 'tickets_responsesedit':
+                await handleTicketsResponsesModalSubmit(interaction, config);
+                break;
+            case 'tickets_typeadd':
+                await handleTicketTypeAddModalSubmit(interaction, config);
+                break;
+            case 'tickets_typeedit':
+                await handleTicketTypeEditModalSubmit(interaction, config, args[0]);
+                break;
+            case 'tickets_editroles': // New case for role editing
+                await handleEditRolesModalSubmit(interaction, config, args.join('_'));
+                break;
+            case 'main_editfield':
+            case 'database_editfield':
+            case 'text_levels_editfield':
+            case 'voice_levels_editfield':
+            case 'tickets_editfield': // Added tickets_editfield
+                await handleGenericEditModalSubmit(interaction, config, module, args.join('_'));
+                break;
+            default:
+                await interaction.reply({ content: 'Unknown config modal submission.', ephemeral: true });
+                break;
         }
     }
 };
 
 async function sendConfigMenu(interaction, config, modulePath, title) {
+        console.log('--- DEBUG: sendConfigMenu ENTERED ---'); 
+    console.log(`DEBUG: interaction passed: ${interaction ? 'DEFINED' : 'UNDEFINED'}`);
+    if (!interaction) {
+        console.error('CRITICAL ERROR: interaction is UNDEFINED at start of sendConfigMenu!');
+        console.error(new Error().stack); 
+        return;
+    }
     const messages = config.admin.messages;
     const moduleConfig = getNestedProperty(config, modulePath);
 
@@ -216,7 +255,7 @@ async function sendConfigMenu(interaction, config, modulePath, title) {
 
     const selectRow = new ActionRowBuilder().addComponents(selectMenu);
 
-    await (interaction.deferred || interaction.replied ? interaction.editReply : interaction.reply)({
+    await (interaction.deferred || interaction.replied ? interaction.editReply.bind(interaction) : interaction.reply.bind(interaction))({
         embeds: [embed],
         components: [selectRow],
         ephemeral: true
@@ -289,6 +328,7 @@ async function sendTicketsConfigMenu(interaction, config) {
     const panelChannel = interaction.guild.channels.cache.get(ticketsConfig.panel_channel_id);
     const ticketCategory = interaction.guild.channels.cache.get(ticketsConfig.ticket_category_id);
     const transcriptsChannel = interaction.guild.channels.cache.get(ticketsConfig.transcripts_channel_id);
+    const adminTicketChannel = interaction.guild.channels.cache.get(ticketsConfig.admin_ticket_channel_id);
 
     embed.addFields(
         { name: 'Panel Setup', value: `Channel: ${panelChannel ? panelChannel.toString() : 'Not Set'}\nCategory: ${ticketCategory ? ticketCategory.name : 'Not Set'}\nTranscripts: ${transcriptsChannel ? transcriptsChannel.toString() : 'Not Set'}`, inline: false },
@@ -296,7 +336,8 @@ async function sendTicketsConfigMenu(interaction, config) {
         { name: 'Support Roles', value: ticketsConfig.support_role_ids.map(id => `<@&${id}>`).join(', ') || 'None', inline: true },
         { name: 'Management Roles', value: ticketsConfig.management_role_ids.map(id => `<@&${id}>`).join(', ') || 'None', inline: true },
         { name: 'Total Ticket Types', value: `${ticketsConfig.ticket_types.length}`, inline: true },
-        { name: 'Close Confirmation Timeout', value: `${ticketsConfig.close_confirmation_timeout_seconds} seconds`, inline: true }
+        { name: 'Close Confirmation Timeout', value: `${ticketsConfig.close_confirmation_timeout_seconds} seconds`, inline: true },
+        { name: 'Admin Ticket Channel', value: adminTicketChannel ? adminTicketChannel.toString() : 'Not Set', inline: true }
     );
 
     const row1 = new ActionRowBuilder()
@@ -334,6 +375,14 @@ async function sendTicketsConfigMenu(interaction, config) {
             new ButtonBuilder()
                 .setCustomId('config_tickets_edit_close_confirmation_timeout_seconds')
                 .setLabel('Edit Close Timeout')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('config_tickets_edit_admin_ticket_channel_id')
+                .setLabel('Edit Admin Ticket Channel')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId('config_tickets_edit_ticket_statuses')
+                .setLabel('Edit Ticket Statuses')
                 .setStyle(ButtonStyle.Secondary)
         );
 
@@ -611,7 +660,6 @@ async function handleTicketTypeEditModalSubmit(interaction, config, typeId) {
 
         if (!['Primary', 'Secondary', 'Success', 'Danger'].includes(updatedButtonStyle)) {
             await interaction.reply({ content: 'Invalid button style. Must be Primary, Secondary, Success, or Danger.', ephemeral: true });
-            return;
         }
         if (!['Low', 'Medium', 'High', 'Critical'].includes(updatedDefaultPriority)) {
             await interaction.reply({ content: 'Invalid default priority. Must be Low, Medium, High, or Critical.', ephemeral: true });
@@ -687,4 +735,24 @@ function setNestedProperty(obj, path, value) {
 function writeConfigToFile(config) {
     const configFilePath = path.resolve(process.cwd(), 'config.json');
     fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2), 'utf8');
+}
+
+async function sendEditRolesModal(interaction, config, fieldName) {
+    const messages = config.admin.messages;
+    const modal = new ModalBuilder()
+        .setCustomId(`modal_config_tickets_editroles_${fieldName}`)
+        .setTitle(`Edit Ticket ${fieldName.replace('_', ' ').replace('ids', 'IDs')}`);
+
+    const current_value = getNestedProperty(config.tickets, fieldName);
+
+    const textInput = new TextInputBuilder()
+        .setCustomId('new_value')
+        .setLabel(`Comma-separated Role IDs for ${fieldName.replace('_', ' ')}`)
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(false)
+        .setValue(Array.isArray(current_value) ? current_value.join(', ') : '');
+
+    modal.addComponents(new ActionRowBuilder().addComponents(textInput));
+
+    await interaction.showModal(modal);
 }

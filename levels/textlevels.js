@@ -1,5 +1,5 @@
 const logger = require('../logger');
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, Guild, GuildMember } = require('discord.js');
 const cooldowns = new Set();
 
 module.exports = {
@@ -58,6 +58,7 @@ module.exports = {
                         enabled TINYINT(1) DEFAULT 1
                     );
                 `);
+                // FIX: Changed `\` to ` at the end of the template literal
                 logger.debug(`[TLS] Ensured table '${channels_table_name}' exists for guild ${guild.name} (${guild.id}).`);
 
             } catch (err) {
@@ -118,10 +119,10 @@ module.exports = {
                     if (level_up_channel) {
                         logger.debug(`[TLS] Sending level up message to channel: ${level_up_channel.name} (${level_up_channel.id}).`);
                         const placeholders = {
-                            '{user.name}': message.author.username,
-                            '{user.id}': message.author.id,
-                            '{level}': userData.tlevel,
-                            '{time}': logger.time_get()
+                            '\{user.name\}': message.author.username,
+                            '\{user.id\}': message.author.id,
+                            '\{level\}': userData.tlevel,
+                            '\{time\}': logger.time_get()
                         };
 
                         let embed_title = config.text_levels.level_up_embed_title;
@@ -146,6 +147,50 @@ module.exports = {
                         logger.tls(`Level up message sent for ${message.author.tag} to Level ${userData.tlevel}.`);
                     } else {
                         logger.warn(`[TLS] Level up channel not found or accessible for guild ${message.guild.name}.`);
+                    }
+                }
+
+                if (config.text_levels.role_rewards && config.text_levels.role_rewards.enabled) {
+                    const member = await message.guild.members.fetch(message.author.id).catch(() => null);
+                    if (member) {
+                        const roleRewards = config.text_levels.role_rewards.level_roles;
+
+                        if (roleRewards && Array.isArray(roleRewards)) {
+                            for (const reward of roleRewards) {
+                                if (userData.tlevel >= reward.required_level) {
+                                    const roleIds = Array.isArray(reward.role_id) ? reward.role_id : [reward.role_id];
+                                    for (const roleId of roleIds) {
+                                        try {
+                                            const role = await message.guild.roles.fetch(roleId);
+                                            if (role && !member.roles.cache.has(roleId)) {
+                                                await member.roles.add(role);
+                                                logger.tls(`Added role ${role.name} to ${message.author.tag} for reaching level ${userData.tlevel}.`);
+                                            }
+                                        } catch (error) {
+                                            logger.error(`[TLS] Error adding role ${roleId} to user ${message.author.tag}: ${error.message}`);
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Remove roles from levels the user no longer qualifies for (basic implementation - can be improved)
+                            for (const reward of roleRewards) {
+                                if (userData.tlevel < reward.required_level) {
+                                    const roleIds = Array.isArray(reward.role_id) ? reward.role_id : [reward.role_id];
+                                    for (const roleId of roleIds) {
+                                         try {
+                                            const role = await message.guild.roles.fetch(roleId);
+                                            if (role && member.roles.cache.has(roleId)) {
+                                                await member.roles.remove(role);
+                                                logger.tls(`Removed role ${role.name} from ${message.author.tag} for no longer qualifying (level ${userData.tlevel}).`);
+                                            }
+                                        } catch (error) {
+                                            logger.error(`[TLS] Error removing role ${roleId} from user ${message.author.tag}: ${error.message}`);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 

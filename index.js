@@ -7,7 +7,7 @@ const logger = require('./logger');
 
 const databaseModule = require('./database');
 const textLevelsModule = require('./levels/textlevels');
-const voiceLevelsModule = require('./levels/voicelevels');
+const voiceLevelsModule = require('././levels/voicelevels');
 const economyModule = require('./utils/economy');
 const moderationModule = require('./moderative/moderation');
 const giveawaysModule = require('./utils/giveaways');
@@ -174,26 +174,22 @@ client.once('ready', async () => {
     logger.debug('All base modules processed. Now loading command modules...');
 
     const commandModules = [
-        textLevelsCommands,
-        voiceLevelsCommands
+        { module: textLevelsCommands, module_name_in_config: 'text_levels' },
+        { module: voiceLevelsCommands, module_name_in_config: 'voice_levels' },
+        { module: adminCommands, module_name_in_config: 'admin' },
+        { module: ticketsCommands, module_name_in_config: 'tickets' }
     ];
-    if (config.admin && config.admin.enabled) {
-        commandModules.push(adminCommands);
-        logger.debug('Admin commands module added for loading.');
-    } else {
-        logger.info('[Admin] Module disabled. Skipping admin commands initialization.');
-    }
-    if (config.tickets && config.tickets.enabled) {
-        commandModules.push(ticketsCommands);
-        logger.debug('Tickets commands module added for loading.');
-    } else {
-        logger.info('[Tickets] Module disabled. Skipping tickets commands initialization.');
-    }
 
-    for (const cmdModuleSource of commandModules) {
-        const initializedCommand = cmdModuleSource.init(config, db_pool);
-        client.commands.set(initializedCommand.commandName, initializedCommand);
-        logger.debug(`Loaded command module: ${initializedCommand.commandName}`);
+    for (const cmdInfo of commandModules) {
+        const cmdDeployment = config.commands_deployment.find(cmd => cmd.module_name === cmdInfo.module_name_in_config);
+        if (!cmdDeployment) {
+            logger.warn(`Deployment configuration not found for module: ${cmdInfo.module_name_in_config}. Skipping command loading.`);
+            continue;
+        }
+
+        const initializedCommand = cmdInfo.module.init(config, db_pool); 
+        client.commands.set(cmdDeployment.base_command_name, initializedCommand);
+        logger.debug(`Loaded command module: ${cmdDeployment.base_command_name} (Internal name: ${initializedCommand.commandName})`);
     }
 
     const commandsToDeploy = [];
@@ -296,7 +292,7 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    if (interaction.isButton() || interaction.isModalSubmit()) {
+    if (interaction.isButton() || interaction.isModalSubmit() || interaction.isStringSelectMenu()) {
         if (interaction.customId.startsWith('config_') || interaction.customId.startsWith('modal_config_')) {
             const adminCommandModule = client.commands.get(adminBaseCommandName);
             if (adminCommandModule && adminCommandModule.handleConfigInteraction) {
